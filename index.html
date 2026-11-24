@@ -1,0 +1,962 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>历史事件检索</title>
+<meta name="description" content="一键搜索历史重大事件：内置精选事件库，可选接入维基百科实时检索。">
+<style>
+  :root{
+    --bgc:#f5f3ee;
+    --scrim:rgba(245,243,238,.55);
+    --fg:#20201e;
+    --muted:#6c6a64;
+    --card:rgba(255,255,255,.74);
+    --card-solid:#fff;
+    --line:rgba(0,0,0,.10);
+    --accent:#2f6f64;
+    --accentfg:#fff;
+    --panel:rgba(255,255,255,.97);
+    --radius:12px;
+  }
+  html.dark{
+    --fg:#ecebe6;
+    --muted:#a3a09a;
+    --card:rgba(26,26,25,.62);
+    --card-solid:#1b1b1a;
+    --line:rgba(255,255,255,.12);
+    --panel:rgba(24,24,23,.97);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    font:15px/1.65 -apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,sans-serif;
+    color:var(--fg);
+    background:var(--bgc);
+    -webkit-font-smoothing:antialiased;
+    min-height:100%;
+  }
+  #bg{position:fixed;inset:0;z-index:0;background-size:cover;background-position:center;background-repeat:no-repeat}
+  #scrim{position:fixed;inset:0;z-index:1;background:var(--scrim);pointer-events:none}
+  .wrap{position:relative;z-index:2;max-width:880px;margin:0 auto;padding:34px 20px 72px}
+
+  header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:22px}
+  h1{font-size:22px;line-height:1.3;margin:0 0 4px;letter-spacing:.02em;font-weight:650}
+  #sub{margin:0;font-size:12.5px;color:var(--muted)}
+
+  button{font:inherit;color:inherit;cursor:pointer;background:none;border:0;padding:0}
+  .primary{
+    background:var(--accent);color:var(--accentfg);border-radius:10px;
+    padding:10px 20px;font-size:14.5px;font-weight:600;white-space:nowrap;
+    transition:filter .15s;
+  }
+  .primary:hover{filter:brightness(1.08)}
+  .ghost{
+    border:1px solid var(--line);background:var(--card);border-radius:9px;
+    padding:8px 14px;font-size:13.5px;color:var(--muted);
+    backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+  }
+  .ghost:hover{color:var(--fg)}
+
+  .searchrow{display:flex;gap:10px;align-items:stretch}
+  #q{
+    flex:1;min-width:0;font:inherit;color:var(--fg);
+    background:var(--card);border:1px solid var(--line);border-radius:11px;
+    padding:12px 15px;outline:none;
+    backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+  }
+  #q::placeholder{color:var(--muted);opacity:.85}
+  #q:focus{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 18%,transparent)}
+
+  .chips{display:flex;flex-wrap:wrap;gap:7px;margin:14px 0 4px}
+  .chip{
+    font-size:12.5px;padding:5px 12px;border-radius:999px;
+    border:1px solid var(--line);color:var(--muted);background:var(--card);
+  }
+  .chip.on{background:var(--accent);border-color:var(--accent);color:var(--accentfg)}
+
+  .tabs{display:flex;gap:18px;margin:20px 0 6px;border-bottom:1px solid var(--line)}
+  .tab{padding:8px 2px;font-size:14px;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px}
+  .tab.on{color:var(--fg);border-bottom-color:var(--accent)}
+  .tab .n{font-size:12px;opacity:.7}
+
+  .meta{font-size:12.5px;color:var(--muted)}
+  #meta{margin:14px 2px 10px}
+
+  #list{display:flex;flex-direction:column;gap:9px}
+  .card{
+    display:grid;grid-template-columns:82px 1fr auto;gap:14px;align-items:start;
+    background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+    padding:13px 15px;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+  }
+  .card:hover{border-color:color-mix(in srgb,var(--accent) 45%,var(--line))}
+  .yr{
+    font-variant-numeric:tabular-nums;font-size:13.5px;font-weight:650;color:var(--accent);
+    padding-top:2px;letter-spacing:.01em;
+  }
+  html.dark .yr{color:color-mix(in srgb,var(--accent) 65%,#fff)}
+  .card h3{margin:0 0 3px;font-size:15.5px;font-weight:600;line-height:1.45;cursor:pointer}
+  .card h3:hover{color:var(--accent)}
+  html.dark .card h3:hover{color:color-mix(in srgb,var(--accent) 65%,#fff)}
+  .card p{margin:0;font-size:13.5px;color:var(--muted);
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px}
+  .tag{font-size:11.5px;color:var(--muted);border:1px solid var(--line);border-radius:6px;padding:1px 7px}
+  .tag.c{border-color:transparent;background:color-mix(in srgb,var(--accent) 12%,transparent);color:var(--accent)}
+  .tag.note{border-color:transparent;background:color-mix(in srgb,#c9a227 18%,transparent);color:#8a6d12}
+  .tag.ext{border-color:transparent;background:color-mix(in srgb,#3b6fb6 16%,transparent);color:#3b6fb6}
+  .acts{display:flex;flex-direction:column;gap:6px;align-items:flex-end}
+  .mini{font-size:12px;color:var(--muted);border:1px solid var(--line);border-radius:7px;padding:4px 9px;white-space:nowrap}
+  .mini:hover{color:var(--fg);border-color:var(--accent)}
+  .mini.on{color:var(--accent);border-color:var(--accent)}
+
+  .empty{padding:34px 18px;text-align:center;color:var(--muted);font-size:13.5px;
+    border:1px dashed var(--line);border-radius:var(--radius);background:var(--card)}
+  .empty a{color:var(--accent);text-decoration:none;border-bottom:1px solid currentColor}
+
+  #extsec{margin-top:34px;border-top:1px solid var(--line);padding-top:18px}
+  .sechead{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:12px}
+  .sechead h2{font-size:14px;margin:0;font-weight:600;color:var(--muted);letter-spacing:.04em}
+  #extlist{display:flex;flex-direction:column;gap:9px}
+  .extcard{grid-template-columns:1fr auto}
+  .extcard .src{font-size:11.5px;color:var(--muted);margin-top:6px}
+  .extcard a{color:var(--accent);text-decoration:none}
+  .skeleton{height:64px;border-radius:var(--radius);background:var(--card);border:1px solid var(--line);opacity:.6}
+
+  footer{margin-top:46px;font-size:12px;color:var(--muted);line-height:1.9;border-top:1px solid var(--line);padding-top:14px}
+  footer code{font-size:11.5px;background:color-mix(in srgb,var(--fg) 7%,transparent);padding:1px 5px;border-radius:4px}
+
+  /* drawer */
+  #mask{position:fixed;inset:0;z-index:8;background:rgba(0,0,0,.28);opacity:0;pointer-events:none;transition:opacity .2s}
+  body.open #mask{opacity:1;pointer-events:auto}
+  #drawer{
+    position:fixed;z-index:9;top:0;right:0;bottom:0;width:min(440px,94vw);
+    background:var(--panel);border-left:1px solid var(--line);
+    transform:translateX(103%);transition:transform .24s cubic-bezier(.4,0,.2,1);
+    overflow:auto;padding:22px 22px 40px;backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+  }
+  body.open #drawer{transform:none}
+  .dhead{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:18px}
+  .dhead h2{font-size:16px;margin:0;font-weight:600}
+  .close{font-size:13px;color:var(--muted);border:1px solid var(--line);border-radius:8px;padding:5px 11px}
+  .close:hover{color:var(--fg)}
+  .field{margin-bottom:20px}
+  .field > label{display:block;font-size:12.5px;color:var(--muted);margin-bottom:7px;letter-spacing:.02em}
+  .field .hint{font-size:11.5px;color:var(--muted);opacity:.85;margin-top:6px;line-height:1.6}
+  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  input[type=color]{
+    width:44px;height:34px;padding:0;border:1px solid var(--line);border-radius:9px;
+    background:none;cursor:pointer;appearance:none;-webkit-appearance:none;overflow:hidden;
+  }
+  input[type=color]::-webkit-color-swatch-wrapper{padding:3px}
+  input[type=color]::-webkit-color-swatch{border:none;border-radius:6px}
+  input[type=text],input[type=url],select,textarea{
+    font:inherit;color:var(--fg);background:var(--card-solid);
+    border:1px solid var(--line);border-radius:9px;padding:8px 11px;outline:none;width:100%;
+  }
+  html.dark input[type=text],html.dark input[type=url],html.dark select,html.dark textarea{background:rgba(255,255,255,.06)}
+  textarea{resize:vertical;min-height:110px;line-height:1.7;font-size:14px}
+  select{width:auto}
+  input[type=range]{width:100%;accent-color:var(--accent);margin:2px 0 0}
+  .swatches{display:flex;gap:7px;flex-wrap:wrap;margin-top:9px}
+  .sw{width:26px;height:26px;border-radius:50%;border:1px solid var(--line)}
+  .sw.on{outline:2px solid var(--accent);outline-offset:2px}
+  .btn{font-size:13px;border:1px solid var(--line);border-radius:9px;padding:8px 14px;color:var(--fg);background:var(--card-solid)}
+  html.dark .btn{background:rgba(255,255,255,.06)}
+  .btn:hover{border-color:var(--accent)}
+  .btn.solid{background:var(--accent);color:var(--accentfg);border-color:var(--accent);font-weight:600}
+  pre{white-space:pre-wrap;word-break:break-all;font:11.5px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace;
+    background:color-mix(in srgb,var(--fg) 6%,transparent);border:1px solid var(--line);
+    border-radius:9px;padding:11px;margin:9px 0 0;color:var(--muted);max-height:220px;overflow:auto}
+  .kw{display:flex;align-items:center;gap:9px;font-size:14px}
+  .kw input{accent-color:var(--accent);width:16px;height:16px}
+  .dtitle{font-size:19px;line-height:1.4;margin:0 0 6px;font-weight:650}
+  .dmeta{font-size:12.5px;color:var(--muted);margin-bottom:14px;display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .dbody{font-size:14px;line-height:1.85;margin-bottom:20px}
+  .dbody a{color:var(--accent);text-decoration:none;border-bottom:1px solid color-mix(in srgb,var(--accent) 40%,transparent)}
+  hr{border:0;border-top:1px solid var(--line);margin:22px 0}
+  .toast{position:fixed;left:50%;bottom:28px;transform:translate(-50%,14px);z-index:20;
+    background:var(--accent);color:var(--accentfg);font-size:13px;padding:9px 18px;border-radius:999px;
+    opacity:0;pointer-events:none;transition:.22s}
+  .toast.show{opacity:1;transform:translate(-50%,0)}
+
+  @media (max-width:600px){
+    .wrap{padding:22px 14px 60px}
+    h1{font-size:19px}
+    .card{grid-template-columns:1fr;gap:8px;padding:12px 13px}
+    .yr{font-size:12.5px;padding-top:0}
+    .acts{flex-direction:row;justify-content:flex-start}
+    .primary{padding:10px 14px}
+  }
+</style>
+</head>
+<body>
+<div id="bg"></div>
+<div id="scrim"></div>
+
+<div class="wrap">
+  <header>
+    <div>
+      <h1>历史事件检索</h1>
+      <p id="sub">共 <span id="seedcount">0</span> 条事件 · 一键搜索 · 收藏与笔记只存在本机</p>
+    </div>
+    <button class="ghost" id="btnSet">设置</button>
+  </header>
+
+  <div class="searchrow">
+    <input id="q" type="search" placeholder="搜事件、人物或年份，如：鸦片战争 / 1789 / 印刷术" autocomplete="off" spellcheck="false">
+    <button class="primary" id="btnSearch">搜索</button>
+  </div>
+
+  <div class="chips" id="chips"></div>
+
+  <div class="tabs">
+    <button class="tab on" data-view="search">搜索</button>
+    <button class="tab" data-view="fav">收藏 <span class="n" id="favn">0</span></button>
+  </div>
+
+  <div id="meta" class="meta"></div>
+  <div id="list"></div>
+
+  <section id="extsec" hidden>
+    <div class="sechead">
+      <h2>站外检索（维基百科）</h2>
+      <span class="meta" id="extmeta"></span>
+    </div>
+    <div id="extlist"></div>
+  </section>
+
+  <footer>
+    内置数据为精选条目，可直接离线使用；若仓库里有 <code>data/events.json</code>（由 <code>tools/bake.mjs</code> 生成），打开页面时会自动加载。<br>
+    站外检索会把关键词发往维基百科（可配置中转地址）。<br>
+    收藏、笔记、背景设置保存在浏览器 <code>localStorage</code>，换设备请用设置里的「导出 JSON」。<br>
+    快捷键：<code>/</code> 聚焦搜索框，<code>Esc</code> 关闭面板。
+  </footer>
+</div>
+
+<div id="mask"></div>
+<aside id="drawer"></aside>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ---------- 1. 内置事件库（精选，离线可用） ---------- */
+const RAW = [
+  // —— 中国 ——
+  [-221,null,"秦统一中国","秦王嬴政灭六国，建立中国第一个中央集权帝国，统一文字、度量衡与货币。","政治","中国","秦朝"],
+  [-209,null,"陈胜吴广起义","大泽乡起义，中国历史上第一次大规模农民起义，动摇秦统治。","战争","中国","陈胜吴广起义"],
+  [-202,null,"西汉建立","刘邦击败项羽称帝，定都长安，休养生息，文景之治奠基。","政治","中国","西汉"],
+  [-138,null,"张骞出使西域","凿空西域，丝绸之路开通，中原与中亚首次官方往来。","探索","中国","张骞"],
+  [105,null,"蔡伦改进造纸术","造纸工艺成熟并推广，知识载体变轻变便宜。","科技","中国","造纸术"],
+  [184,null,"黄巾起义","东汉末年大规模民变，地方军阀坐大。","战争","中国","黄巾起义"],
+  [208,null,"赤壁之战","孙刘联军以火攻破曹操水军，奠定三国鼎立。","战争","中国","赤壁之战"],
+  [280,null,"西晋灭吴统一","结束近百年三国分裂，但统一短暂。","政治","中国","西晋"],
+  [317,null,"衣冠南渡","西晋灭亡，士族与政权南迁，江南经济文化加速开发。","社会","中国","东晋"],
+  [589,null,"隋灭陈统一","结束南北朝分裂，重建大一统帝国。","政治","中国","隋朝"],
+  [605,null,"开凿大运河","贯通南北水运体系，经济重心与政治中心联动。","经济","中国","京杭大运河"],
+  [618,null,"唐朝建立","李渊建唐，贞观之治与开元盛世相继出现。","政治","中国","唐朝"],
+  [645,null,"玄奘归国译经","取经归长安，佛教中国化与中印文化交流的高峰。","文化","中国","玄奘"],
+  [755,null,"安史之乱","唐由盛转衰，藩镇割据与人口南迁开始。","战争","中国","安史之乱"],
+  [875,null,"黄巢起义","唐末流民大起义，加速唐朝崩溃。","战争","中国","黄巢"],
+  [960,null,"北宋建立","赵匡胤陈桥兵变，重文轻武，士大夫政治成形。","政治","中国","北宋"],
+  [1045,null,"毕昇发明活字印刷","泥活字印刷出现，书籍复制效率大幅提升。","科技","中国","活字印刷术"],
+  [1069,null,"王安石变法","青苗、免役、市易等新政，宋代最系统的改革尝试。","政治","中国","王安石变法"],
+  [1127,null,"靖康之变","金军攻破汴京，北宋灭亡，宋室南渡。","战争","中国","靖康之变"],
+  [1206,null,"蒙古帝国建立","成吉思汗统一草原各部，开启横跨欧亚的扩张。","政治","中国","蒙古帝国"],
+  [1279,null,"元朝统一全国","崖山海战，元灭南宋，中国首次由北方游牧政权统一。","政治","中国","元朝"],
+  [1368,null,"明朝建立","朱元璋称帝，重建汉地统一政权，废丞相。","政治","中国","明朝"],
+  [1405,null,"郑和下西洋","七次远航，规模空前的官方远洋船队。","探索","中国","郑和下西洋"],
+  [1581,null,"一条鞭法推行","张居正改革赋役，赋税折银，白银货币化加深。","经济","中国","一条鞭法"],
+  [1644,null,"明清易代","李自成入北京，吴三桂引清军入关。","政治","中国","清朝"],
+  [1662,null,"郑成功收复台湾","驱逐荷兰东印度公司殖民者，台湾重归中国政权。","战争","中国","郑成功"],
+  [1689,null,"中俄尼布楚条约","划定东段边界，清朝与俄国首次正式划界。","政治","中国","尼布楚条约"],
+  [1793,null,"马戛尔尼使华","礼仪与贸易冲突显现，中西体系性矛盾浮出水面。","政治","中国","马戛尔尼使团"],
+  [1839,null,"虎门销烟","林则徐虎门销毁鸦片，成为鸦片战争的直接导火索。","政治","中国","虎门销烟"],
+  [1840,null,"第一次鸦片战争","《南京条约》割地赔款开埠，中国近代史开端。","战争","中国","第一次鸦片战争"],
+  [1851,null,"太平天国运动","规模最大的农民战争之一，江南人口与经济重创。","战争","中国","太平天国"],
+  [1861,null,"洋务运动","师夷长技，近代军工、航运、电报与海军起步。","经济","中国","洋务运动"],
+  [1894,null,"甲午战争","北洋水师覆没，《马关条约》割台，朝野震动。","战争","中国","甲午战争"],
+  [1898,null,"戊戌变法","百日维新失败，但思想启蒙与制度讨论延续。","政治","中国","戊戌变法"],
+  [1900,null,"义和团与八国联军","《辛丑条约》巨额赔款，主权进一步丧失。","战争","中国","八国联军"],
+  [1911,null,"辛亥革命","推翻两千年帝制，建立亚洲第一个共和国。","政治","中国","辛亥革命"],
+  [1915,null,"新文化运动","白话文、科学与民主思潮，知识界整体转向。","文化","中国","新文化运动"],
+  [1919,null,"五四运动","学生抗议引发全国反帝浪潮，新思潮扩散。","政治","中国","五四运动"],
+  [1921,null,"中国共产党成立","中国革命的政治格局自此重塑。","政治","中国","中国共产党"],
+  [1927,null,"国共分裂与南昌起义","第一次国共合作破裂，武装斗争与农村根据地开始。","战争","中国","南昌起义"],
+  [1931,null,"九一八事变","日本侵占东北，局部抗战开始。","战争","中国","九一八事变"],
+  [1937,1945,"全面抗战","卢沟桥事变后八年抗战，中国成为二战东方主战场。","战争","中国","中国抗日战争"],
+  [1949,null,"中华人民共和国成立","政权更替，土地改革与社会结构重组。","政治","中国","中华人民共和国"],
+  [1950,1953,"抗美援朝","出兵朝鲜，冷战格局下的高强度局部战争。","战争","中国","抗美援朝战争"],
+  [1958,1961,"大跃进","全民炼钢与人民公社化，随后出现严重经济困难。","社会","中国","大跃进"],
+  [1966,1976,"文化大革命","十年动乱，教育、文化与经济秩序遭受重创。","社会","中国","文化大革命"],
+  [1971,null,"恢复联合国席位","联大2758号决议，中华人民共和国取得中国代表权。","政治","中国","联合国大会2758号决议"],
+  [1972,null,"尼克松访华","中美破冰，《上海公报》改变冷战三角格局。","政治","中国","尼克松访华"],
+  [1978,null,"改革开放","十一届三中全会转向经济建设，家庭联产承包与特区试验。","经济","中国","改革开放"],
+  [1997,null,"香港回归","一国两制首次落地实践。","政治","中国","香港回归"],
+  [1999,null,"澳门回归","葡萄牙管制结束，澳门特别行政区成立。","政治","中国","澳门回归"],
+  [2001,null,"加入世界贸易组织","深度融入全球产业链，出口与制造业高速增长。","经济","中国","世界贸易组织"],
+  [2003,null,"非典疫情","SARS 公共卫生危机，信息公开与应急体系被迫改革。","灾难","中国","严重急性呼吸系统综合症"],
+  [2008,null,"汶川大地震","特大地震，全国性救援与灾后重建。","灾难","中国","汶川大地震"],
+  [2008,null,"北京奥运会","国际形象、城市基建与体育产业同步跃升。","文化","中国","2008年夏季奥林匹克运动会"],
+
+  // —— 世界 ——
+  [-3500,null,"文字诞生于美索不达米亚","楔形文字出现，记录、契约与官僚制度起步。","文化","世界","楔形文字"],
+  [-2560,null,"吉萨金字塔建成","古埃及王权动员能力与工程技术的极致体现。","文化","世界","吉萨金字塔"],
+  [-1754,null,"汉谟拉比法典","现存较早的完整成文法典，同态复仇与契约并存。","政治","世界","汉谟拉比法典"],
+  [-1200,null,"青铜时代晚期崩溃","地中海多个文明在数十年内同时瓦解，贸易网络断裂。","社会","世界","青铜时代崩溃"],
+  [-776,null,"首届古代奥运会","希腊城邦以竞技构建共同体认同。","文化","世界","古代奥林匹克运动会"],
+  [-509,null,"罗马共和国建立","共和制、元老院与公民大会的制度实验。","政治","世界","罗马共和国"],
+  [-490,null,"马拉松战役","希腊联军击退波斯第一次入侵，城邦自信上升。","战争","世界","马拉松战役"],
+  [-431,null,"伯罗奔尼撒战争","雅典与斯巴达争霸，希腊世界整体衰落。","战争","世界","伯罗奔尼撒战争"],
+  [-336,-323,"亚历山大东征","十年间建立横跨欧亚非的帝国，开启希腊化时代。","战争","世界","亚历山大大帝"],
+  [-264,-146,"布匿战争","罗马与迦太基三度决战，罗马取得地中海霸权。","战争","世界","布匿战争"],
+  [-27,null,"罗马帝国建立","屋大维称奥古斯都，共和外壳下的帝制确立。","政治","世界","罗马帝国"],
+  [476,null,"西罗马帝国灭亡","欧洲进入中世纪，地中海统一秩序终结。","政治","世界","西罗马帝国"],
+  [622,null,"希吉拉与伊斯兰教兴起","穆罕默德迁往麦地那，阿拉伯帝国扩张的起点。","文化","世界","希吉拉"],
+  [800,null,"查理曼加冕","西欧帝国理念复兴，王权与教权结盟。","政治","世界","查理曼"],
+  [1066,null,"诺曼征服英格兰","诺曼底贵族重塑英格兰王权与封建结构。","战争","世界","诺曼征服英格兰"],
+  [1096,1291,"十字军东征","近两百年的宗教战争，东西方贸易与文化交流加速。","战争","世界","十字军东征"],
+  [1215,null,"大宪章","王权受法律限制，宪政传统的源头文件之一。","政治","世界","大宪章"],
+  [1347,1351,"黑死病","欧洲人口减少约三分之一，劳动力与宗教秩序剧变。","灾难","世界","黑死病"],
+  [1453,null,"君士坦丁堡陷落","拜占庭终结，奥斯曼帝国控制欧亚枢纽。","战争","世界","君士坦丁堡的陷落"],
+  [1455,null,"古腾堡活字印刷","印刷机使书籍规模化生产，推动宗教改革与科学革命。","科技","世界","印刷机"],
+  [1492,null,"哥伦布抵达美洲","大航海时代开启，动植物、人口与疾病全球交换。","探索","世界","克里斯托弗·哥伦布"],
+  [1498,null,"达伽马抵达印度","绕非洲航线打通，香料贸易格局重写。","探索","世界","瓦斯科·达伽马"],
+  [1517,null,"宗教改革","路德《九十五条论纲》，西欧基督教世界分裂。","文化","世界","宗教改革"],
+  [1519,1522,"麦哲伦环球航行","首次环球航行，证实地球球体与海洋相连。","探索","世界","麦哲伦"],
+  [1588,null,"西班牙无敌舰队覆灭","西班牙海上霸权受挫，英国与荷兰崛起。","战争","世界","西班牙无敌舰队"],
+  [1640,null,"英国革命","议会对抗王权，最终走向君主立宪。","政治","世界","英国内战"],
+  [1648,null,"威斯特伐利亚和约","主权国家与均势体系确立，现代国际关系起点。","政治","世界","威斯特伐利亚和约"],
+  [1687,null,"牛顿《自然哲学的数学原理》","经典力学体系建立，机械论世界图景成形。","科技","世界","自然哲学的数学原理"],
+  [1776,null,"美国独立宣言","天赋人权与人民主权，现代共和制度的范本。","政治","世界","美国独立宣言"],
+  [1789,null,"法国大革命","推翻旧制度，自由、平等、博爱的政治动员。","政治","世界","法国大革命"],
+  [1804,null,"拿破仑法典","民法典确立私有财产与契约自由，影响全球私法。","政治","世界","拿破仑一世"],
+  [1815,null,"滑铁卢战役与维也纳体系","拿破仑战争结束，欧洲大国均势维持近百年。","战争","世界","滑铁卢战役"],
+  [1848,null,"欧洲革命浪潮","民族主义与自由主义同时爆发，旧秩序动摇。","政治","世界","1848年革命"],
+  [1859,null,"达尔文《物种起源》","进化论重塑生命观与人类自我认知。","科技","世界","物种起源"],
+  [1861,1865,"美国内战","奴隶制与联邦权力之争，工业北方胜出。","战争","世界","美国内战"],
+  [1868,null,"明治维新","日本快速工业化与军国化，东亚秩序改变。","政治","世界","明治维新"],
+  [1871,null,"德意志统一","德意志帝国成立，欧洲力量平衡重排。","政治","世界","德意志帝国"],
+  [1885,null,"柏林会议","欧洲列强以条约瓜分非洲，殖民主义高峰。","政治","世界","柏林会议"],
+  [1914,1918,"第一次世界大战","工业化总体战，四大帝国解体，凡尔赛体系形成。","战争","世界","第一次世界大战"],
+  [1917,null,"俄国十月革命","布尔什维克夺权，世界第一个社会主义国家出现。","政治","世界","十月革命"],
+  [1918,1920,"大流感与一战结束","全球约五千万人死亡，公共卫生体系被迫重建。","灾难","世界","1918年流感大流行"],
+  [1929,1939,"大萧条","股市崩盘引发全球性失业与贸易萎缩，极端政治抬头。","经济","世界","大萧条"],
+  [1933,null,"纳粹上台","魏玛共和国终结，极权与扩军备战启动。","政治","世界","纳粹德国"],
+  [1939,1945,"第二次世界大战","人类史上最大规模战争，联合国与核时代由此开始。","战争","世界","第二次世界大战"],
+  [1945,null,"原子弹与联合国成立","核威慑时代开启，集体安全机制建立。","战争","世界","广岛市原子弹爆炸"],
+  [1947,null,"冷战开始","杜鲁门主义与马歇尔计划，两极格局固化。","政治","世界","冷战"],
+  [1948,null,"以色列建国","中东格局重塑，阿以冲突延续至今。","政治","世界","以色列"],
+  [1949,null,"北约成立","跨大西洋军事同盟体系成型。","政治","世界","北大西洋公约组织"],
+  [1957,null,"斯普特尼克1号升空","太空竞赛开启，教育与科研投入剧增。","科技","世界","斯普特尼克1号"],
+  [1961,null,"加加林进入太空","人类首次载人航天成功。","探索","世界","尤里·加加林"],
+  [1962,null,"古巴导弹危机","核战争边缘的十三天，危机管控机制建立。","政治","世界","古巴导弹危机"],
+  [1969,null,"阿波罗11号登月","人类首次踏上月球，航天工程达到高峰。","探索","世界","阿波罗11号"],
+  [1969,null,"ARPANET 首次联网","互联网雏形出现，信息传播方式被改写。","科技","世界","ARPANET"],
+  [1979,null,"伊朗伊斯兰革命","政教合一的共和国建立，中东格局转向。","政治","世界","伊朗伊斯兰革命"],
+  [1989,null,"柏林墙倒塌","东欧剧变连锁反应，冷战走向终局。","政治","世界","柏林墙"],
+  [1991,null,"苏联解体","两极格局终结，全球化与民族国家重组。","政治","世界","苏联解体"],
+  [1995,null,"世界贸易组织成立","全球贸易规则体系化，供应链全球化加速。","经济","世界","世界贸易组织"],
+  [2001,null,"九一一事件","反恐战争与全球安全政策全面转向。","政治","世界","九一一袭击事件"],
+  [2008,null,"全球金融危机","雷曼倒闭引发连锁反应，金融监管重构。","经济","世界","2007年－2008年环球金融危机"],
+  [2011,null,"阿拉伯之春","中东多国政权更迭，地区秩序长期动荡。","政治","世界","阿拉伯之春"],
+  [2015,null,"巴黎气候协定","首个覆盖全球的减排框架。","政治","世界","巴黎协定"],
+  [2020,null,"新冠疫情全球大流行","公共卫生、供应链与工作方式同时剧变。","灾难","世界","2019冠状病毒病"],
+  [2022,null,"俄乌战争爆发","欧洲安全秩序重塑，能源与粮食市场震荡。","战争","世界","2022年俄罗斯入侵乌克兰"],
+  [2022,null,"生成式 AI 进入公众","大语言模型普及，知识生产与就业结构开始改变。","科技","世界","ChatGPT"]
+];
+
+const SEED = RAW.map((a,i)=>({id:'s'+i, y:a[0], e:a[1], t:a[2], s:a[3], c:a[4], r:a[5], w:a[6]}))
+               .sort((a,b)=>a.y-b.y);
+const CATS = ['全部','政治','战争','科技','文化','经济','社会','灾难','探索'];
+const SWATCHES = ['#f5f3ee','#eef1f5','#f7f1e8','#eaf3ef','#f2eef6','#1f2320','#22262b','#141414'];
+
+/* ---------- 2. 状态 ---------- */
+const K_SET='hxs.set', K_FAV='hxs.fav', K_NOTE='hxs.note';
+const DEFAULTS = {bgColor:'#f5f3ee', bgImage:'', scrim:0.55, accent:'#2f6f64', external:true, lang:'zh', proxy:''};
+let S      = Object.assign({}, DEFAULTS, read(K_SET, {}));
+let FAVS   = read(K_FAV, []);
+let NOTES  = read(K_NOTE, {});
+let VIEW='search', CAT='全部', Q='', POOL=new Map(), extItems=[], extErr='', extBusy=false, ctrl=null, curItem=null, extQ='';
+
+function read(k,d){ try{ const v=localStorage.getItem(k); return v?JSON.parse(v):d; }catch(e){ return d; } }
+function write(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); return true; }catch(e){ return false; } }
+function saveSet(){ if(!write(K_SET,S)) toast('设置保存失败：存储空间可能已满'); }
+function saveFav(){ write(K_FAV,FAVS); }
+function saveNotes(){ write(K_NOTE,NOTES); }
+
+/* ---------- 3. 工具 ---------- */
+const $ = s=>document.querySelector(s);
+const esc = s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function fmtY(y,e){
+  if(y==null||y==='') return '—';
+  const f=v=>v<0?'前'+Math.abs(v):String(v);
+  return (e!=null&&e!==y) ? f(y)+'–'+f(e) : f(y);
+}
+function hex2rgb(h){
+  h=(h||'').replace('#','');
+  if(h.length===3) h=h.split('').map(c=>c+c).join('');
+  const n=parseInt(h,16);
+  return [ (n>>16)&255, (n>>8)&255, n&255 ];
+}
+let toastT=null;
+function toast(msg){
+  const t=$('#toast'); t.textContent=msg; t.classList.add('show');
+  clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),1900);
+}
+
+/* ---------- 4. 主题 ---------- */
+function applyTheme(){
+  const [r,g,b]=hex2rgb(S.bgColor);
+  const L=(0.2126*r+0.7152*g+0.0722*b)/255;
+  const dark=L<0.5;
+  const root=document.documentElement;
+  root.style.setProperty('--bgc',`rgb(${r},${g},${b})`);
+  root.style.setProperty('--scrim',`rgba(${r},${g},${b},${S.scrim})`);
+  root.style.setProperty('--accent',S.accent||'#2f6f64');
+  root.classList.toggle('dark',dark);
+  const bg=$('#bg');
+  bg.style.backgroundImage = S.bgImage ? 'url("'+S.bgImage+'")' : 'none';
+}
+
+/* ---------- 5. 检索 ---------- */
+function tokens(q){ return q.trim().toLowerCase().split(/\s+/).filter(Boolean); }
+function scoreOf(it,tks){
+  const t=(it.t||'').toLowerCase(), s=(it.s||'').toLowerCase(),
+        m=((it.c||'')+' '+(it.r||'')+' '+(it.w||'')).toLowerCase(), y=String(it.y==null?'':it.y);
+  let sc=0;
+  for(const tk of tks){
+    if(t.includes(tk)) sc+=100;
+    else if(m.includes(tk)) sc+=42;
+    else if(y.includes(tk)) sc+=36;
+    else if(s.includes(tk)) sc+=20;
+    else return -1;
+  }
+  return sc + Math.max(0,26-t.length);
+}
+function localResults(){
+  let arr = SEED.filter(x=>CAT==='全部'||x.c===CAT);
+  const q=Q.trim();
+  if(!q) return arr;
+  const tks=tokens(q);
+  return arr.map(x=>({x, s:scoreOf(x,tks)})).filter(o=>o.s>=0)
+            .sort((a,b)=> b.s-a.s || a.x.y-b.x.y).map(o=>o.x);
+}
+
+/* ---------- 6. 渲染 ---------- */
+function renderChips(){
+  $('#chips').innerHTML = CATS.map(c=>
+    `<button class="chip${c===CAT?' on':''}" data-cat="${esc(c)}">${esc(c)}</button>`).join('');
+}
+function render(){
+  POOL.clear();
+  const list=$('#list');
+  $('#favn').textContent = FAVS.length;
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on', t.dataset.view===VIEW));
+
+  if(VIEW==='fav'){
+    $('#meta').textContent = FAVS.length ? `共 ${FAVS.length} 条收藏，按年份排序` : '';
+    if(!FAVS.length){
+      list.innerHTML = `<div class="empty">还没有收藏。搜索结果右侧点「收藏」即可加入这里。</div>`;
+    } else {
+      const arr = FAVS.slice().sort((a,b)=>(a.y==null?9e9:a.y)-(b.y==null?9e9:b.y));
+      arr.forEach(it=>POOL.set(it.id,it));
+      list.innerHTML = arr.map(it=>cardHTML(it,true)).join('');
+    }
+    $('#extsec').hidden = true;
+    return;
+  }
+
+  const arr = localResults();
+  arr.forEach(it=>POOL.set(it.id,it));
+  const q=Q.trim();
+  $('#meta').textContent = arr.length
+    ? (q ? `本地匹配 ${arr.length} 条` : `共 ${SEED.length} 条，按年代排序`)
+    : '';
+  if(!arr.length){
+    list.innerHTML = `<div class="empty">本地库里没有匹配「${esc(q)}」的条目。${
+      S.external ? '' : '可以到 <a href="#" data-act="openset">设置</a> 里开启站外检索，或换个关键词。'}</div>`;
+  } else {
+    list.innerHTML = arr.map(it=>cardHTML(it,false)).join('');
+  }
+  renderExt();
+}
+function cardHTML(it,isFav){
+  const d = FAVS.some(f=>f.id===it.id);
+  return `<article class="card" data-id="${esc(it.id)}">
+    <div class="yr">${fmtY(it.y,it.e)}</div>
+    <div>
+      <h3 data-act="open">${esc(it.t)}</h3>
+      <p>${esc(it.s||'')}</p>
+      <div class="tags">
+        ${it.c?`<span class="tag c">${esc(it.c)}</span>`:''}
+        ${it.r?`<span class="tag">${esc(it.r)}</span>`:''}
+        ${it.ext?'<span class="tag ext">站外</span>':''}
+        ${NOTES[it.id]?'<span class="tag note">有笔记</span>':''}
+      </div>
+    </div>
+    <div class="acts">
+      <button class="mini${d?' on':''}" data-act="fav">${d?'已收藏':'收藏'}</button>
+      ${isFav?'<button class="mini" data-act="del">移除</button>':'<button class="mini" data-act="open">详情</button>'}
+    </div>
+  </article>`;
+}
+
+/* ---------- 7. 站外检索 ---------- */
+function wikiURL(lang,q){
+  const p=new URLSearchParams({
+    action:'query', format:'json', origin:'*', utf8:'1',
+    generator:'search', gsrsearch:q, gsrlimit:'8', gsrnamespace:'0',
+    prop:'extracts|info', exintro:'1', explaintext:'1', exlimit:'max', inprop:'url'
+  });
+  return `https://${lang}.wikipedia.org/w/api.php?`+p.toString();
+}
+function withProxy(url){
+  if(!S.proxy) return url;
+  return S.proxy.includes('{url}')
+    ? S.proxy.replace('{url}', encodeURIComponent(url))
+    : S.proxy.replace(/\/?$/,'/') + encodeURIComponent(url);
+}
+function parseYear(text){
+  const m=(text||'').match(/(公元前)?\s?(\d{3,4})\s?年/);
+  if(!m) return null;
+  const n=parseInt(m[2],10);
+  if(n<1000 && !m[1]) return null;
+  return m[1] ? -n : n;
+}
+async function remoteSearch(q){
+  if(!S.external || !q.trim()) return;
+  if(ctrl) ctrl.abort();
+  ctrl=new AbortController();
+  extBusy=true; extErr=''; extItems=[]; extQ=q.trim(); renderExt();
+  const langs = S.lang==='both'?['zh','en']:[S.lang];
+  const out=[];
+  try{
+    for(const lang of langs){
+      const url=withProxy(wikiURL(lang,q));
+      const timer=setTimeout(()=>ctrl&&ctrl.abort(), 12000);
+      let data;
+      try{
+        const r=await fetch(url,{signal:ctrl.signal});
+        if(!r.ok) throw new Error('HTTP '+r.status);
+        data=await r.json();
+      } finally { clearTimeout(timer); }
+      const pages=data&&data.query&&data.query.pages?data.query.pages:{};
+      Object.values(pages)
+        .sort((a,b)=>(a.index||99)-(b.index||99))
+        .forEach(p=>{
+          const ex=(p.extract||'').replace(/\s+/g,' ').trim();
+          if(!ex) return;
+          out.push({
+            id:'w:'+lang+':'+p.title, t:p.title,
+            s: ex.length>230 ? ex.slice(0,230)+'…' : ex,
+            y: parseYear(ex), e:null, c:'', r: lang==='zh'?'维基中文':'Wikipedia',
+            w:p.title, ext:true, lang,
+            url: p.fullurl || `https://${lang}.wikipedia.org/wiki/`+encodeURIComponent(p.title)
+          });
+        });
+    }
+    extItems=out.slice(0,12);
+  }catch(e){
+    extErr = e.name==='AbortError' ? '请求超时或被中断' : ('请求失败：'+e.message);
+  }finally{
+    extBusy=false; renderExt();
+  }
+}
+function renderExt(){
+  const sec=$('#extsec');
+  const show = VIEW==='search' && S.external && Q.trim().length>0;
+  sec.hidden=!show;
+  if(!show) return;
+  const meta=$('#extmeta'), box=$('#extlist');
+  if(extBusy){
+    meta.textContent='检索中…';
+    box.innerHTML='<div class="skeleton"></div><div class="skeleton"></div>';
+    return;
+  }
+  if(extErr){
+    meta.textContent='';
+    box.innerHTML=`<div class="empty">${esc(extErr)}<br>
+      维基百科需要能访问外网。国内网络可到 <a href="#" data-act="openset">设置</a> 里填一个中转地址（Cloudflare Worker，代码已内置，可直接复制）。</div>`;
+    return;
+  }
+  if(!extItems.length){
+    meta.textContent='';
+    box.innerHTML = extQ===Q.trim()
+      ? '<div class="empty">站外没有找到相关条目，换个关键词试试。</div>'
+      : '<div class="empty">按回车键同时检索维基百科（结果会显示在这里）。</div>';
+    return;
+  }
+  meta.textContent=`${extItems.length} 条，来自${S.lang==='both'?'中英文维基':'维基百科'}`;
+  POOL.clear();
+  extItems.forEach(it=>POOL.set(it.id,it));
+  localResults().forEach(it=>POOL.set(it.id,it));
+  box.innerHTML=extItems.map(it=>{
+    const d=FAVS.some(f=>f.id===it.id);
+    return `<article class="card extcard" data-id="${esc(it.id)}">
+      <div>
+        <h3 data-act="open">${esc(it.t)}</h3>
+        <p>${esc(it.s)}</p>
+        <div class="src">${esc(it.r)}${it.y!=null?' · 约 '+fmtY(it.y):''} · <a href="${esc(it.url)}" target="_blank" rel="noopener">原文</a></div>
+      </div>
+      <div class="acts"><button class="mini${d?' on':''}" data-act="fav">${d?'已收藏':'收藏'}</button></div>
+    </article>`;
+  }).join('');
+}
+
+/* ---------- 8. 抽屉 ---------- */
+function openDrawer(html){
+  $('#drawer').innerHTML=html;
+  $('#drawer').scrollTop=0;
+  document.body.classList.add('open');
+}
+function closeDrawer(){ document.body.classList.remove('open'); }
+
+function openDetail(it){
+  curItem=it;
+  const hasNote=NOTES[it.id]||'';
+  const fav=FAVS.some(f=>f.id===it.id);
+  const link = it.url || (it.w? `https://zh.wikipedia.org/wiki/`+encodeURIComponent(it.w) : '');
+  openDrawer(`
+    <div class="dhead"><h2>事件详情</h2><button class="close" data-act="close">关闭</button></div>
+    <h3 class="dtitle">${esc(it.t)}</h3>
+    <div class="dmeta">
+      <span>${fmtY(it.y,it.e)}</span>
+      ${it.c?`<span class="tag c">${esc(it.c)}</span>`:''}
+      ${it.r?`<span class="tag">${esc(it.r)}</span>`:''}
+      ${it.ext?'<span class="tag ext">站外</span>':''}
+      ${link?`<a href="${esc(link)}" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none">查看原文</a>`:''}
+    </div>
+    <div class="dbody">${esc(it.s||'（暂无简介）')}</div>
+    <div class="field">
+      <label>我的笔记（自动保存到本机）</label>
+      <textarea id="note" placeholder="记下你关心的点，比如时间线、相关人物、疑问…">${esc(hasNote)}</textarea>
+    </div>
+    <div class="row">
+      <button class="btn ${fav?'':'solid'}" data-act="fav">${fav?'取消收藏':'收藏这条'}</button>
+      <button class="btn" data-act="copy">复制摘要</button>
+    </div>
+  `);
+  const ta=$('#note');
+  let t=null;
+  ta.addEventListener('input',()=>{
+    NOTES[it.id]=ta.value;
+    clearTimeout(t); t=setTimeout(saveNotes,300);
+  });
+}
+
+const WORKER_CODE = `export default {
+  async fetch(req) {
+    const u = new URL(req.url);
+    const target = u.searchParams.get("url");
+    if (!target) return new Response("missing url", { status: 400 });
+    if (!/^https:\\/\\/[a-z.]*wikipedia\\.org\\//.test(target))
+      return new Response("not allowed", { status: 403 });
+    const r = await fetch(target, { headers: { "User-Agent": "history-search/1.0" } });
+    const h = new Headers(r.headers);
+    h.set("Access-Control-Allow-Origin", "*");
+    h.set("Cache-Control", "public, max-age=86400");
+    return new Response(r.body, { status: r.status, headers: h });
+  }
+}`;
+
+function openSettings(){
+  openDrawer(`
+    <div class="dhead"><h2>设置</h2><button class="close" data-act="close">关闭</button></div>
+
+    <div class="field">
+      <label>背景颜色</label>
+      <div class="row">
+        <input type="color" id="bgcolor" value="${esc(S.bgColor)}">
+        <span class="meta" id="bgcolortxt">${esc(S.bgColor)}</span>
+      </div>
+      <div class="swatches">
+        ${SWATCHES.map(c=>`<button class="sw${c===S.bgColor?' on':''}" data-sw="${esc(c)}" style="background:${esc(c)}"></button>`).join('')}
+      </div>
+    </div>
+
+    <div class="field">
+      <label>背景图片</label>
+      <div class="row">
+        <button class="btn" data-act="pickimg">上传图片</button>
+        ${S.bgImage?'<button class="btn" data-act="clearimg">清除</button>':''}
+        <input type="file" id="imgfile" accept="image/*" hidden>
+      </div>
+      <div class="hint">图片会压缩后只存在你自己的浏览器里，不会上传到任何服务器。</div>
+      <div style="margin-top:12px">
+        <label style="display:block;font-size:12.5px;color:var(--muted);margin-bottom:4px">背景遮罩 ${Math.round(S.scrim*100)}%</label>
+        <input type="range" id="scrim" min="0" max="95" step="1" value="${Math.round(S.scrim*100)}">
+        <div class="hint">越大文字越清楚，图片越淡。</div>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>主题色</label>
+      <div class="row">
+        <input type="color" id="accent" value="${esc(S.accent)}">
+        <span class="meta">按钮、年份、链接的颜色</span>
+      </div>
+    </div>
+
+    <hr>
+
+    <div class="field">
+      <label>站外检索</label>
+      <label class="kw"><input type="checkbox" id="external" ${S.external?'checked':''}> 搜索时同时查维基百科</label>
+      <div class="hint">关闭后完全离线，只用内置事件库。</div>
+      <div class="row" style="margin-top:10px">
+        <span class="meta">语言</span>
+        <select id="lang">
+          <option value="zh" ${S.lang==='zh'?'selected':''}>中文</option>
+          <option value="en" ${S.lang==='en'?'selected':''}>英文</option>
+          <option value="both" ${S.lang==='both'?'selected':''}>中文 + 英文</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>中转地址（可选）</label>
+      <input type="url" id="proxy" value="${esc(S.proxy)}" placeholder="https://xxx.workers.dev/?url={url}">
+      <div class="hint">国内直连维基百科通常不通。自建一个 Cloudflare Worker（免费）把地址填进来即可，<code>{url}</code> 会被替换成接口地址。留空则直连。</div>
+      <div class="row" style="margin-top:10px">
+        <button class="btn" data-act="copyworker">复制 Worker 代码</button>
+        <button class="btn" data-act="testproxy">测试连通</button>
+      </div>
+      <div class="hint" id="testout"></div>
+    </div>
+
+    <hr>
+
+    <div class="field">
+      <label>数据</label>
+      <div class="row">
+        <button class="btn" data-act="export">导出 JSON</button>
+        <button class="btn" data-act="import">导入 JSON</button>
+        <input type="file" id="jsonfile" accept=".json,application/json" hidden>
+      </div>
+      <div class="hint">包含收藏与笔记（可选含背景设置），换设备或给朋友备份用。</div>
+      <div class="row" style="margin-top:10px">
+        <button class="btn" data-act="clearfav">清空收藏</button>
+        <button class="btn" data-act="reset">恢复默认外观</button>
+      </div>
+    </div>
+  `);
+  bindSettings();
+}
+
+function bindSettings(){
+  const d=$('#drawer');
+  const bgc=$('#bgcolor');
+  bgc.addEventListener('input',()=>{
+    S.bgColor=bgc.value; $('#bgcolortxt').textContent=bgc.value;
+    d.querySelectorAll('.sw').forEach(s=>s.classList.toggle('on', s.dataset.sw===S.bgColor));
+    applyTheme(); saveSet();
+  });
+  const ac=$('#accent');
+  ac.addEventListener('input',()=>{ S.accent=ac.value; applyTheme(); saveSet(); });
+  const sc=$('#scrim');
+  sc.addEventListener('input',()=>{
+    S.scrim=(+sc.value)/100; applyTheme(); saveSet();
+    sc.parentElement.querySelector('label').textContent='背景遮罩 '+sc.value+'%';
+  });
+  $('#external').addEventListener('change',e=>{ S.external=e.target.checked; saveSet(); render(); });
+  $('#lang').addEventListener('change',e=>{ S.lang=e.target.value; saveSet(); });
+  $('#proxy').addEventListener('change',e=>{ S.proxy=e.target.value.trim(); saveSet(); toast('已保存中转地址'); });
+  $('#imgfile').addEventListener('change',async e=>{
+    const f=e.target.files&&e.target.files[0]; if(!f) return;
+    try{
+      const data=await shrink(f);
+      S.bgImage=data;
+      if(!write(K_SET,S)){ S.bgImage=''; toast('图片太大，存储失败，换一张小一点的'); applyTheme(); return; }
+      applyTheme(); openSettings(); toast('背景已更新');
+    }catch(err){ toast('图片读取失败'); }
+  });
+  $('#jsonfile').addEventListener('change',importJSON);
+}
+
+function shrink(file,maxW=1500){
+  return new Promise((res,rej)=>{
+    const fr=new FileReader();
+    fr.onload=()=>{
+      const img=new Image();
+      img.onload=()=>{
+        const sc=Math.min(1, maxW/img.width);
+        const c=document.createElement('canvas');
+        c.width=Math.max(1,Math.round(img.width*sc));
+        c.height=Math.max(1,Math.round(img.height*sc));
+        c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+        res(c.toDataURL('image/jpeg',0.82));
+      };
+      img.onerror=rej; img.src=fr.result;
+    };
+    fr.onerror=rej; fr.readAsDataURL(file);
+  });
+}
+
+/* ---------- 9. 导入导出 ---------- */
+function exportJSON(){
+  const data={app:'history-search', v:1, exportedAt:new Date().toISOString(), favs:FAVS, notes:NOTES, settings:{bgColor:S.bgColor,accent:S.accent,scrim:S.scrim,external:S.external,lang:S.lang,proxy:S.proxy}};
+  const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='history-'+new Date().toISOString().slice(0,10)+'.json';
+  a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+  toast('已导出');
+}
+function importJSON(e){
+  const f=e.target.files&&e.target.files[0]; if(!f) return;
+  const fr=new FileReader();
+  fr.onload=()=>{
+    try{
+      const d=JSON.parse(fr.result);
+      if(Array.isArray(d.favs)){
+        const seen=new Set(FAVS.map(x=>x.id));
+        d.favs.forEach(x=>{ if(x&&x.id&&!seen.has(x.id)){ FAVS.push(x); seen.add(x.id); } });
+        saveFav();
+      }
+      if(d.notes&&typeof d.notes==='object'){ NOTES=Object.assign({},NOTES,d.notes); saveNotes(); }
+      if(d.settings&&typeof d.settings==='object'){ S=Object.assign({},S,d.settings); saveSet(); applyTheme(); }
+      render(); openSettings(); toast('导入完成');
+    }catch(err){ toast('文件格式不对'); }
+  };
+  fr.readAsText(f);
+}
+
+/* ---------- 10. 交互绑定 ---------- */
+let deb=null;
+$('#q').addEventListener('input',e=>{
+  Q=e.target.value;
+  extItems=[]; extErr=''; extQ='';
+  clearTimeout(deb);
+  deb=setTimeout(()=>{ render(); }, 90);
+});
+$('#q').addEventListener('keydown',e=>{
+  if(e.key==='Enter'){ e.preventDefault(); doRemote(); }
+});
+$('#btnSearch').addEventListener('click',()=>{ render(); doRemote(); });
+$('#btnSet').addEventListener('click',openSettings);
+document.querySelector('.tabs').addEventListener('click',e=>{
+  const t=e.target.closest('.tab'); if(!t) return;
+  VIEW=t.dataset.view; render();
+});
+$('#chips').addEventListener('click',e=>{
+  const c=e.target.closest('.chip'); if(!c) return;
+  CAT=c.dataset.cat; renderChips(); render();
+});
+$('#mask').addEventListener('click',closeDrawer);
+
+function doRemote(){
+  if(!S.external){ toast('站外检索已关闭，可在设置中开启'); return; }
+  remoteSearch(Q);
+}
+
+document.addEventListener('click',async e=>{
+  const el=e.target.closest('[data-act]');
+  if(el && el.dataset.act==='openset'){ e.preventDefault(); openSettings(); return; }
+  if(!el) return;
+  const act=el.dataset.act;
+  if(act==='close'){ closeDrawer(); return; }
+
+  const card=el.closest('.card');
+  const it = card ? POOL.get(card.dataset.id) : (document.body.classList.contains('open') ? curItem : null);
+
+  if(act==='open'&&it){ openDetail(it); return; }
+  if(act==='fav'&&it){
+    const i=FAVS.findIndex(f=>f.id===it.id);
+    if(i>=0){ FAVS.splice(i,1); toast('已取消收藏'); }
+    else { FAVS.push(it); toast('已收藏'); }
+    saveFav(); render(); if(document.body.classList.contains('open')) refreshFavBtn(it);
+    return;
+  }
+  if(act==='del'&&it){
+    FAVS=FAVS.filter(f=>f.id!==it.id); saveFav(); render(); toast('已移除'); return;
+  }
+  if(act==='copy'&&it){
+    try{ await navigator.clipboard.writeText(it.t+'\n'+fmtY(it.y,it.e)+'\n'+(it.s||'')); toast('已复制'); }
+    catch(err){ toast('复制失败，请手动选择'); }
+    return;
+  }
+  if(act==='sw'){ /* handled in settings via delegation below */ }
+
+  // settings actions
+  const d=$('#drawer');
+  if(act==='pickimg'){ $('#imgfile').click(); return; }
+  if(act==='clearimg'){ S.bgImage=''; saveSet(); applyTheme(); openSettings(); toast('背景图片已清除'); return; }
+  if(act==='copyworker'){
+    try{ await navigator.clipboard.writeText(WORKER_CODE); toast('Worker 代码已复制'); }
+    catch(err){ toast('复制失败，请手动选择'); }
+    return;
+  }
+  if(act==='testproxy'){ testProxy(); return; }
+  if(act==='export'){ exportJSON(); return; }
+  if(act==='import'){ $('#jsonfile').click(); return; }
+  if(act==='clearfav'){ if(confirm('确定清空全部收藏？')){ FAVS=[]; saveFav(); render(); toast('已清空'); } return; }
+  if(act==='reset'){ S.bgImage=''; S.bgColor=DEFAULTS.bgColor; S.accent=DEFAULTS.accent; S.scrim=DEFAULTS.scrim; saveSet(); applyTheme(); openSettings(); toast('已恢复默认'); return; }
+});
+
+document.addEventListener('click',e=>{
+  const sw=e.target.closest('.sw');
+  if(sw){ S.bgColor=sw.dataset.sw; saveSet(); applyTheme(); openSettings(); }
+});
+
+function refreshFavBtn(it){
+  const d=$('#drawer');
+  const b=d.querySelector('[data-act="fav"]');
+  if(!b) return;
+  const has=FAVS.some(f=>f.id===it.id);
+  if(b.classList.contains('btn')){ b.textContent=has?'取消收藏':'收藏这条'; b.classList.toggle('solid',!has); }
+}
+
+async function testProxy(){
+  const out=$('#testout'); if(!out) return;
+  out.textContent='测试中…';
+  try{
+    const r=await fetch(withProxy(wikiURL('zh','长城')),{signal:AbortSignal.timeout?AbortSignal.timeout(10000):undefined});
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const j=await r.json();
+    const n=j&&j.query&&j.query.pages?Object.keys(j.query.pages).length:0;
+    out.textContent = n ? `连通正常，返回 ${n} 条结果` : '连通但无结果，检查地址格式';
+  }catch(err){ out.textContent='失败：'+(err.message||'网络错误')+'（直连不通时请务必填中转地址）'; }
+}
+
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape') closeDrawer();
+  if(e.key==='/' && document.activeElement!==$('#q') && !/INPUT|TEXTAREA/.test(document.activeElement.tagName)){
+    e.preventDefault(); $('#q').focus();
+  }
+});
+
+/* ---------- 11. 启动 ---------- */
+$('#seedcount').textContent=SEED.length;
+applyTheme(); renderChips(); render();
+
+// 如果仓库里带了 data/events.json（tools/bake.mjs 生成），自动合并进来
+(async function loadExtra(){
+  let arr;
+  try{
+    const r=await fetch('data/events.json',{cache:'no-cache'});
+    if(!r.ok) return;
+    arr=await r.json();
+  }catch(e){ return; }
+  if(!Array.isArray(arr)||!arr.length) return;
+  const keyOf=x=>(x.y==null?'':x.y)+'|'+(x.t||'').slice(0,2);
+  const seenT=new Set(SEED.map(x=>x.t));
+  const seenK=new Set(SEED.map(keyOf));
+  let added=0;
+  arr.forEach((x,i)=>{
+    if(!x||!x.t||seenT.has(x.t)||seenK.has(keyOf(x))) return;   // 繁简同名 / 同年的同主题条目不重复收录
+    seenT.add(x.t); seenK.add(keyOf(x));
+    SEED.push({
+      id:'x'+i, y:(x.y==null?null:x.y), e:(x.e==null?null:x.e), t:x.t,
+      s:x.s||'', c:x.c||'', r:x.r||'', w:x.w||x.t
+    });
+    added++;
+  });
+  if(!added) return;
+  SEED.sort((a,b)=>(a.y==null?9e9:a.y)-(b.y==null?9e9:b.y));
+  $('#seedcount').textContent=SEED.length;
+  render();
+  toast('已加载扩展事件 '+added+' 条');
+})();
+</script>
+</body>
+</html>
