@@ -2,12 +2,14 @@
  * 把维基数据里的“重大事件”抓下来，生成 data/events.json
  *
  * 用法：
- *   node tools/bake.mjs               # 默认 1200 条
+ *   node tools/bake.mjs               # 默认 4000 条
  *   node tools/bake.mjs --limit 300   # 少抓一些
+ *   node tools/bake.mjs --budget 100  # 最多跑 100 秒，先把现有的写成文件
  *
- * 筛选逻辑：事件类型限定为战争 / 战役 / 革命 / 起义 / 政变 / 条约 / 屠杀 /
- * 恐怖袭击 / 地震 / 疾病爆发 / 灾害；要求有中文维基条目，且跨语言条目数
- * >= 25（跨语言条目越多，通常越“重大”），按此降序取前 N 条。
+ * 筛选逻辑：类型限定为战争 / 战役 / 革命 / 起义 / 政变 / 条约 / 屠杀 / 种族灭绝 /
+ * 恐怖袭击 / 行刺 / 地震 / 饥荒 / 瘟疫 / 灾害 / 经济危机 / 社会运动 / 罢工 /
+ * 探险 / 科学发现 / 航天任务 / 会议；要求有中文维基条目，跨语言条目数门槛
+ * 默认 12（战役 45、会议 40，避开小题大做），按跨语言条目数降序取前 N 条。
  * 摘要取中文维基条目的首段（简体），取不到时退回维基数据的一句话描述。
  *
  * 抓到的摘要会缓存在 .cache/extracts.json，中断后重跑会跳过已抓的部分。
@@ -15,8 +17,13 @@
 
 const LIMIT = (() => {
   const i = process.argv.indexOf('--limit');
-  return i > -1 ? parseInt(process.argv[i + 1], 10) || 1200 : 1200;
+  return i > -1 ? parseInt(process.argv[i + 1], 10) || 4000 : 4000;
 })();
+const BUDGET = (() => {
+  const i = process.argv.indexOf('--budget');
+  return i > -1 ? (parseInt(process.argv[i + 1], 10) || 0) * 1000 : 0;
+})();
+const MIN_SITELINKS = 12;
 
 const UA = 'history-search-baker/1.0 (https://github.com/; contact: local)';
 const OUT = new URL('../data/events.json', import.meta.url);
@@ -27,24 +34,32 @@ const { writeFile, mkdir, readFile } = await import('node:fs/promises');
 const TYPES = {
   Q198: '战争', Q178561: '战争', Q645883: '战争',
   Q10931: '政治', Q124734: '政治', Q45382: '政治', Q131569: '政治',
-  Q3199915: '社会', Q2223653: '社会',
+  Q1464916: '政治', Q3882219: '政治', Q625994: '政治',
+  Q3199915: '社会', Q2223653: '社会', Q41397: '社会',
+  Q49773: '社会', Q49776: '社会', Q273120: '社会',
   Q7944: '灾难', Q3241045: '灾难', Q3839081: '灾难',
+  Q168247: '灾难', Q12184: '灾难',
+  Q290178: '经济',
+  Q12772819: '科技',
+  Q6502154: '探索', Q2133344: '探索',
 };
+
+// 战役、会议这两个类太容易滥，门槛高一点
+const TYPE_MIN = { Q178561: 45, Q625994: 40 };
 
 const SPARQL = `
 SELECT DISTINCT ?item ?type ?label ?desc ?date ?sitelinks ?article ?countryLabel WHERE {
   VALUES ?type { ${Object.keys(TYPES).map(q => 'wd:' + q).join(' ')} }
-  ?item wdt:P31 ?type ;
-        wdt:P585 ?date ;
-        wikibase:sitelinks ?sitelinks .
-  FILTER(?sitelinks >= 25)
-  FILTER(?type != wd:Q178561 || ?sitelinks >= 45)
+  ?item wdt:P31 ?type .
+  { ?item wdt:P585 ?date } UNION { ?item wdt:P580 ?date }
+  ?item wikibase:sitelinks ?sitelinks .
+  FILTER(?sitelinks >= ${MIN_SITELINKS})
+  ${Object.entries(TYPE_MIN).map(([q, n]) => `FILTER(?type != wd:${q} || ?sitelinks >= ${n})`).join('\n  ')}
   ?article schema:about ?item ; schema:isPartOf <https://zh.wikipedia.org/> .
-  OPTIONAL { ?item wdt:P17 ?country }
   SERVICE wikibase:label { bd:serviceParam wikibase:language "zh-hans,zh,en". }
 }
 ORDER BY DESC(?sitelinks)
-LIMIT 6000`;
+LIMIT 30000`;
 
 const CHINA_TEXT = /(中国|中國|中华|中華)/;
 
@@ -78,6 +93,7 @@ function titleFromArticle(url) {
 
 function titleFromExtract(ex) {
   const seg = (ex || '').split(/[（(]/)[0].trim();
+  if (/^(位于|是|属于|屬於|又称|又稱|本条目|本条|该|此)/.test(seg)) return '';
   if (seg && seg.length <= 16 && !/[，。；：、,„]/.test(seg)) return seg;
   return '';
 }
@@ -147,56 +163,69 @@ async function saveCache(map) {
 }
 
 async function main() {
+  const t0 = Date.now();
   process.stdout.write('查询维基数据…\n');
   const rows = await sparql(SPARQL);
   process.stdout.write(`候选 ${rows.length} 行\n`);
   const items = pick(rows);
-  process.stdout.write(`去重后 ${items.length} 条，开始抓摘要\n`);
+  process.stdout.write(`去重后 ${items.length} 条\n`);
 
   const cache = await loadCache();
-  let done = 0;
-  for (let i = 0; i < items.length; i += 20) {
-    const batch = items.slice(i, i + 20);
-    const missing = batch.filter(x => !cache.has(x.w));
-    if (missing.length) {
+  const todo = items.filter(x => !cache.has(x.w));
+  process.stdout.write(`已缓存 ${items.length - todo.length}，需抓摘要 ${todo.length}\n`);
+
+  const batches = [];
+  for (let i = 0; i < todo.length; i += 20) batches.push(todo.slice(i, i + 20));
+
+  let idx = 0, fetched = 0;
+  async function worker() {
+    while (idx < batches.length) {
+      if (BUDGET && Date.now() - t0 > BUDGET) return;
+      const b = batches[idx++];
       let map = new Map();
       for (let attempt = 0; attempt < 3 && map.size === 0; attempt++) {
         try {
-          map = await wikitext(missing.map(x => x.w));
+          map = await wikitext(b.map(x => x.w));
         } catch (err) {
-          process.stdout.write(`  批次 ${i / 20 + 1} 第 ${attempt + 1} 次失败：${err.message}\n`);
-          await new Promise(r => setTimeout(r, 2000 * (attempt + 1)));
+          process.stdout.write(`  失败重试（${err.message}）\n`);
+          await new Promise(r => setTimeout(r, 1500 * (attempt + 1)));
         }
       }
-      for (const it of missing) {
+      if (map.size === 0) continue;          // 整批失败就不写缓存，下次重试
+      for (const it of b) {
         const hit = map.get(it.w) || null;
         cache.set(it.w, hit ? { title: hit.title, extract: clip(hit.extract) } : { title: '', extract: '' });
       }
-      await saveCache(cache);
-    }
-    for (const it of batch) {
-      const hit = cache.get(it.w);
-      if (hit && hit.extract) {
-        it.s = hit.extract;
-        if (hit.title) { it.w = hit.title; it.t = titleFromExtract(hit.extract) || hit.title; }
+      fetched += b.length;
+      if (fetched % 200 < 20) {
+        process.stdout.write(`  摘要 ${fetched}/${todo.length}\n`);
+        await saveCache(cache);
       }
-      if (!it.s) it.s = it.desc || '';
-      // 自动抓来的条目地域不好判准，就不乱标了
-      it.r = '';
+      await new Promise(r => setTimeout(r, 120));
     }
-    done += batch.length;
-    process.stdout.write(`  摘要 ${done}/${items.length}\n`);
-    if (missing.length) await new Promise(r => setTimeout(r, 300));
+  }
+  await Promise.all([worker(), worker(), worker()]);
+  await saveCache(cache);
+
+  for (const it of items) {
+    const hit = cache.get(it.w);
+    if (hit && hit.extract) {
+      it.s = hit.extract;
+      if (hit.title) { it.w = hit.title; it.t = titleFromExtract(hit.extract) || hit.title; }
+    }
+    if (!it.s) it.s = it.desc || '';
+    it.r = '';   // 自动抓来的条目地域判不准，就不乱标了
   }
 
   const out = items
     .filter(it => it.s)          // 没摘要的不进数据，免得点了空白
-    .map(it => ({ y: it.y, e: it.e, t: it.t, s: it.s, c: it.c, r: it.r, w: it.w }))
+    .map(it => ({ y: it.y, e: it.e, t: it.t, s: it.s, c: it.c, r: it.r, w: it.w, n: it.sl }))
     .sort((a, b) => a.y - b.y);
 
   await mkdir(new URL('../data/', import.meta.url), { recursive: true });
   await writeFile(OUT, JSON.stringify(out, null, 0), 'utf8');
-  process.stdout.write(`\n完成：${out.length} 条 → data/events.json\n`);
+  const left = items.length - items.filter(x => cache.get(x.w) && cache.get(x.w).extract).length;
+  process.stdout.write(`\n完成：${out.length} 条 → data/events.json，还有 ${left} 条未抓到摘要，重跑可继续\n`);
 }
 
 main().catch(err => {
