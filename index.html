@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>历史事件检索</title>
-<meta name="description" content="一键搜索历史重大事件：内置精选事件库，可选接入维基百科实时检索。">
+<title>世界知识检索</title>
+<meta name="description" content="一键搜索世界历史事件、冷知识、文化习俗：内置知识库，可选接入维基百科实时检索。">
 <style>
   :root{
     --bgc:#f5f3ee;
@@ -41,6 +41,7 @@
   .wrap{position:relative;z-index:2;max-width:880px;margin:0 auto;padding:34px 20px 72px}
 
   header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:22px}
+  header > div{min-width:0}
   h1{font-size:22px;line-height:1.3;margin:0 0 4px;letter-spacing:.02em;font-weight:650}
   #sub{margin:0;font-size:12.5px;color:var(--muted)}
 
@@ -53,7 +54,7 @@
   .primary:hover{filter:brightness(1.08)}
   .ghost{
     border:1px solid var(--line);background:var(--card);border-radius:9px;
-    padding:8px 14px;font-size:13.5px;color:var(--muted);
+    padding:8px 14px;font-size:13.5px;color:var(--muted);white-space:nowrap;flex:0 0 auto;
     backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
   }
   .ghost:hover{color:var(--fg)}
@@ -190,6 +191,24 @@
   textarea{resize:vertical;min-height:110px;line-height:1.7;font-size:14px}
   select{width:auto}
   input[type=range]{width:100%;accent-color:var(--accent);margin:2px 0 0}
+  /* 自绘滑块：不依赖原生 range 的命中区域，避免坐标错位 */
+  .slider{
+    position:relative;height:32px;margin:4px 0 0;cursor:pointer;
+    touch-action:none;-webkit-user-select:none;user-select:none;outline:none;
+  }
+  .slider:focus-visible .slider-knob{box-shadow:0 0 0 4px color-mix(in srgb,var(--accent) 25%,transparent)}
+  .slider-rail{
+    position:absolute;left:0;right:0;top:50%;height:4px;transform:translateY(-50%);
+    background:color-mix(in srgb,var(--fg) 14%,transparent);border-radius:999px;overflow:hidden;
+  }
+  .slider-fill{height:100%;background:var(--accent);border-radius:999px;transition:width .05s linear}
+  .slider-knob{
+    position:absolute;top:50%;width:18px;height:18px;border-radius:50%;
+    background:var(--accent);border:2px solid var(--card-solid);
+    transform:translate(-50%,-50%);pointer-events:none;
+    box-shadow:0 1px 4px rgba(0,0,0,.22);transition:left .05s linear;
+  }
+  .slider-marks{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);opacity:.7;margin-top:-2px}
   .swatches{display:flex;gap:7px;flex-wrap:wrap;margin-top:9px}
   .sw{width:26px;height:26px;border-radius:50%;border:1px solid var(--line)}
   .sw.on{outline:2px solid var(--accent);outline-offset:2px}
@@ -229,23 +248,21 @@
 <div class="wrap">
   <header>
     <div>
-      <h1>历史事件检索</h1>
-      <p id="sub">共 <span id="seedcount">0</span> 条内容 · 事件、冷知识、习俗 · 收藏与笔记只存在本机</p>
+      <h1>世界知识检索</h1>
+      <p id="sub">共 <span id="seedcount">0</span> 条内容</p>
     </div>
     <button class="ghost" id="btnSet">设置</button>
   </header>
 
   <div class="searchrow">
-    <input id="q" type="search" placeholder="搜事件、人物或年份，如：鸦片战争 / 1789 / 印刷术" autocomplete="off" spellcheck="false">
+    <input id="q" type="search" placeholder="输入搜索" autocomplete="off" spellcheck="false">
     <button class="primary" id="btnSearch">搜索</button>
   </div>
 
   <div class="chips" id="chips"></div>
 
   <div class="tabs">
-    <button class="tab on" data-view="search">事件</button>
-    <button class="tab" data-view="trivia">冷知识</button>
-    <button class="tab" data-view="custom">习俗</button>
+    <button class="tab on" data-view="all">全部</button>
     <button class="tab" data-view="fav">收藏 <span class="n" id="favn">0</span></button>
   </div>
 
@@ -264,10 +281,8 @@
   </section>
 
   <footer>
-    事件库是时间、人物、年份的“大事记”；冷知识是可靠但容易被误传的小细节；存疑板块里的说法标了“未确认”，别当结论引用。<br>
-    内置数据可直接离线使用；若仓库里有 <code>data/events.json</code>（由 <code>tools/bake.mjs</code> 生成），打开页面时会自动加载。<br>
-    收藏、笔记、背景设置保存在浏览器 <code>localStorage</code>，换设备请用设置里的「导出 JSON」。<br>
-    快捷键：<code>/</code> 聚焦搜索框，<code>Esc</code> 关闭面板。
+    收藏、笔记、背景设置保存在 <code>localStorage</code>本地保存，换设备请用设置里的「导出 JSON」。<br>
+    电脑快捷键：<code>/</code> 聚焦搜索框，<code>Esc</code> 关闭面板。
   </footer>
 </div>
 
@@ -511,9 +526,8 @@ const RAW = [
   [2021,null,"天问一号着陆火星","中国首次火星探测即完成“绕、落、巡”。","探索","中国","天问一号"]
 ];
 
-const SEED = RAW.map((a,i)=>({id:'s'+i, y:a[0], e:a[1], t:a[2], s:a[3], c:a[4], r:a[5], w:a[6], n:100, kind:'event', cf:3, secs:null}))
+const SEED = RAW.map((a,i)=>({id:'s'+i, y:a[0], e:a[1], t:a[2], s:a[3], c:a[4], r:a[5], w:a[6], n:100, kind:'event', cf:3, secs:null, tg:[]}))
                .sort((a,b)=>a.y-b.y);
-const CATS = ['全部','政治','战争','科技','文化','经济','社会','灾难','探索'];
 
 /* ---------- 1b. 冷知识 / 存疑说法 ----------
    格式：[类型, 可信度, 标题, 一句话, [[段标题,段落],...], 分类, 地区]
@@ -580,6 +594,122 @@ const TRIVIA_RAW = [
     [['转折','1872 年天皇公开食肉，报纸宣传“吃肉使人强壮”，饮食结构随之改变。']],'饮食','东亚'],
   ['f',3,'圣索菲亚大教堂做过三种用途','教堂、清真寺、博物馆，2020 年又恢复为清真寺',
     [['为什么典型','一座建筑的身份变迁，压缩了拜占庭、奥斯曼与现代土耳其的历史。']],'历史','世界'],
+
+  // —— 饮食与生活 ——
+  ['f',3,'辣椒进入中国不到四百年','明代才从美洲经海路传入，此前的“辛”靠花椒、姜、茱萸',
+    [['时间线','万历年间见于浙江、广东的笔记，清初传入湖南、四川；今天印象中的“川辣”其实是清代以后才成型的。']],'饮食','中国'],
+  ['f',3,'土豆和玉米改变了欧亚人口','高产的美洲作物在 18–19 世纪推高了粮食供给与人口',
+    [['机制','土豆单位面积的热量产出远高于谷物，普鲁士、爱尔兰人口因此快速增长。'],['代价','1845 年爱尔兰马铃薯晚疫病造成大饥荒，单一作物的风险被彻底暴露。']],'饮食','世界'],
+  ['f',3,'可可豆在阿兹特克当过货币','可可豆能用来交税和买东西，甚至能“数”出价格',
+    [['后来','16 世纪西班牙人加糖热饮，19 世纪才出现固体巧克力与可可粉。']],'饮食','美洲'],
+  ['f',3,'味精 1908 年在日本被提取','池田菊苗从海带汤里分离出谷氨酸，提出“鲜味”',
+    [['影响','鲜成为第五种基本味觉，中餐“吊高汤”的经验得到化学解释。']],'饮食','东亚'],
+  ['f',3,'方便面 1958 年诞生','安藤百福用油炸脱水做出能长期保存的面饼',
+    [['规模','如今全球每年消费约一千亿份，是扩散最快的食品发明之一。']],'饮食','东亚'],
+  ['f',3,'三明治来自牌桌','18 世纪英国桑威奇伯爵不愿离牌局，让仆人把肉夹在面包里送来',
+    [['词义','人名变食物名，再变成“夹层结构”的通用词。']],'饮食','欧洲'],
+  ['f',3,'可乐最初是药房饮料','1886 年彭伯顿在亚特兰大药房出售，早期配方含古柯提取物',
+    [['变化','1903 年去除可卡因保留咖啡因；二战美军配给让它在全球铺开。']],'饮食','世界'],
+  ['f',3,'牛仔裤本来是给矿工的','1873 年李维·斯特劳斯用铆钉加固工装裤',
+    [['变时装','西部片与战后青年文化把它从工装推成全球日常服。']],'服饰','世界'],
+  ['f',3,'高跟鞋最初是男鞋','16–17 世纪波斯骑手与欧洲贵族男性先穿',
+    [['转折','18 世纪后男性弃穿，高跟鞋逐渐成为女鞋与身份符号。']],'服饰','欧洲'],
+  ['f',3,'领带源自克罗地亚雇佣兵','cravate 一词来自法语的“Croate”',
+    [['由来','17 世纪法国军队见克罗地亚士兵系布巾，路易十四也系，遂成风潮。']],'服饰','欧洲'],
+  ['f',3,'T 恤从内衣变成外衣','二战美军把棉质圆领衫当内衣发放，战后成为日常上衣',
+    [['节点','1951 年《欲望号街车》里马龙·白兰度穿 T 恤出镜，正式“洗白”。']],'服饰','世界'],
+  ['f',3,'旗袍是 1920 年代上海改良的','旗装与西式剪裁结合，不是清代日常服装',
+    [['细节','收腰、开衩、装袖都是民国上海裁缝的改造，30 年代成为都市女装代表。']],'服饰','中国'],
+  ['f',3,'拉链早期被当“自动扣”卖','1893 年出现雏形，1913 年做出现代结构',
+    [['普及','1920 年代用于靴子和烟草袋，30 年代才进入服装。']],'服饰','世界'],
+
+  // —— 发明小史 ——
+  ['f',3,'铅笔里的“铅”其实是石墨','16 世纪英国发现石墨矿，被误认为铅',
+    [['命名','石墨当时叫 plumbago（黑铅），名字就这么沿用下来。']],'发明','世界'],
+  ['f',3,'橡皮擦 1770 年被“发现”','普里斯特利注意到橡胶能擦掉铅笔痕',
+    [['巧合','rubber 原本就指“能擦掉东西的材料”，后才变成橡胶的通用名。']],'发明','欧洲'],
+  ['f',3,'圆珠笔 1938 年由匈牙利记者发明','比罗兄弟为报纸印刷设计，1945 年在阿根廷量产',
+    [['普及','廉价、不漏墨，二战后迅速取代钢笔成为大众书写工具。']],'发明','世界'],
+  ['f',3,'微波炉来自雷达实验','1945 年斯宾塞发现磁控管能加热口袋里的巧克力',
+    [['商业化','1947 年推出“雷达炉”，体积如冰箱，70 年代才进入家庭。']],'发明','世界'],
+  ['f',3,'空调最初是为印刷厂除湿','1902 年开利为纽约一家印刷厂控制湿度',
+    [['影响','冷气重塑了美国南部的人口与经济，也改变了全球城市形态。']],'发明','世界'],
+  ['f',3,'电梯的关键是安全制动','1852 年奥的斯演示自动刹车，高层建筑才有可能',
+    [['连带','电梯推动钢结构摩天楼与地价逻辑一并成立。']],'发明','世界'],
+  ['f',3,'二维码是日本汽车零件厂的副产品','1994 年电装公司为追踪零件而设计，未申请排他专利',
+    [['扩散','免费开放标准让它成了移动支付的入口。']],'发明','东亚'],
+  ['f',3,'信用卡 1950 年始于一顿饭','纽约商人麦克纳马拉忘带钱包，促成大来卡',
+    [['演化','从餐饮签单到全球清算网络，信用消费成为现代金融的基础。']],'发明','世界'],
+  ['f',3,'闹钟让城市按点上班','工厂制度需要统一时间，闹钟与打卡机随之普及',
+    [['更早','修道院钟声与守夜人是最早的“叫醒服务”。']],'发明','世界'],
+  ['f',3,'时区是铁路逼出来的','1884 年华盛顿会议确立全球时区',
+    [['原因','各地太阳时不同，列车时刻表无法协调，英国铁路先统一“铁路时间”。']],'发明','世界'],
+  ['f',3,'红绿灯 1868 年出现在伦敦','用煤气灯与手动旗语指挥马车',
+    [['电气化','1912 年出现电力信号灯，1920 年代形成三色制。']],'发明','欧洲'],
+
+  // —— 语言与词源 ——
+  ['f',3,'OK 来自一个拼写玩笑','1840 年代波士顿报纸把“all correct”故意拼成“oll korrect”',
+    [['扩散','铁路与电报把它带向全国，成了最成功的美国出口词之一。']],'语言','世界'],
+  ['f',3,'沙皇与凯撒同源','царь 与 kaiser 都来自 Caesar',
+    [['原因','罗马皇帝的称号变成了“皇帝”的通名，随基督教一起东传。']],'语言','欧洲'],
+  ['f',3,'“站”字来自蒙古语','元代驿站 jamči 音译为“站赤”，“车站”“驿站”由此而来',
+    [['细节','日语“駅”同源，东亚的交通词汇共享一段蒙古帝国遗产。']],'语言','中国'],
+  ['f',3,'“社会”“经济”是日本造的汉语词','明治时期用汉字翻译 society / economy，清末回流中国',
+    [['影响','今天大量现代汉语学术词汇都是“和制汉语”，如哲学、革命、警察。']],'语言','东亚'],
+  ['f',3,'英语里的粤语借词','dim sum（点心）、kowtow（磕头）、typhoon（台风）',
+    [['路径','19 世纪广州、香港的贸易与移民把它带进英语词典。']],'语言','世界'],
+  ['f',3,'“幽默”是林语堂的译法','humour 早期译作“诙谐”，1920 年代定译为“幽默”',
+    [['主张','他坚持音译以保留原词的微妙，今天已成常用词。']],'语言','中国'],
+
+  // —— 体育 ——
+  ['f',3,'马拉松 42.195 公里是英国王室定的','1908 年伦敦奥运为了让起点在温莎城堡、终点在王室包厢前',
+    [['后来','1921 年国际田联把它定为标准距离。']],'体育','世界'],
+  ['f',3,'现代奥运会 1896 年在雅典重启','顾拜旦推动，首届 14 国 241 名运动员',
+    [['演变','从业余主义到职业化、商业化，电视转播改变了一切。']],'体育','世界'],
+  ['f',3,'足球规则 1863 年在伦敦酒馆写定','英格兰足总成立，统一了各校五花八门的踢法',
+    [['分化','“用手的那一支”后来独立成橄榄球。']],'体育','欧洲'],
+  ['f',3,'篮球是体育老师发明的','1891 年奈史密斯为冬天室内课设计，用桃筐当球门',
+    [['扩散','由 YMCA 传通全球，1936 年成为奥运项目。']],'体育','世界'],
+
+  // —— 艺术与音乐 ——
+  ['f',3,'五线谱源自中世纪教堂','用线条标音高的做法经数百年演化而定型',
+    [['演化','13 世纪为四线，17 世纪定型为五线，成为西方音乐的通用书写系统。']],'艺术','欧洲'],
+  ['f',3,'钢琴 1700 年前后在意大利诞生','克里斯托福里改进击弦结构，能控制强弱',
+    [['命名','pianoforte（弱-强）后来简称 piano。']],'艺术','欧洲'],
+  ['f',3,'芭蕾生于意大利宫廷、成于法国','15 世纪意大利宴会有舞蹈插段，路易十四时期职业化',
+    [['转折','19 世纪俄罗斯把技术推到极致，《天鹅湖》成为标杆。']],'艺术','欧洲'],
+  ['f',3,'电影 1895 年在巴黎收费放映','卢米埃尔兄弟的咖啡馆放映被视为电影诞生',
+    [['早期','观众看《火车进站》真的会躲，因为第一次见到运动影像。']],'艺术','欧洲'],
+  ['f',3,'印象派得名于一句讥讽','1874 年莫奈《日出·印象》被评论家嘲笑，画派顺势自称印象派',
+    [['意义','从被马到被追，艺术史的“命名权”常常来自对手。']],'艺术','欧洲'],
+  ['f',3,'摇滚乐是两种美国音乐的混合','黑人节奏布鲁斯与白人乡村音乐在 1950 年代合流',
+    [['社会意义','电台与唱片让跳种族的音乐消费早于制度性融合。']],'艺术','世界'],
+  ['f',3,'敦煌藏经洞 1900 年被发现','道士王圆箓清理积沙时发现数万件写本',
+    [['后续','大量文献流散到英法俄日，促成“敦煌学”成为国际学科。']],'艺术','中国'],
+
+  // —— 医学 ——
+  ['f',3,'洗手作为制度始于 1847 年','塞麦尔维斯要求医生用漂白粉洗手，产妇死亡率骤降',
+    [['阻力','当时医学界拒绝接受，他晚年在精神病院去世；几十年后细菌学才给出解释。']],'医学','欧洲'],
+  ['f',3,'麻醉 1846 年在波士顿公开演示','乙醚麻醉让外科手术从“抢时间”变成“精细操作”',
+    [['影响','手术、牙科与产科同时被改写。']],'医学','世界'],
+  ['f',3,'血型 1901 年被发现','兰德施泰纳发现 ABO 系统，输血才变得安全',
+    [['影响','此前输血靠运气，之后成为常规医疗手段。']],'医学','欧洲'],
+
+  // —— 自然与地理 ——
+  ['f',3,'闰年规则是 400 年 97 闰','能被 4 整除则闰，整百年需要被 400 整除',
+    [['为什么','一年约 365.2422 天，简单“四年一闰”会多算，需要修正项。']],'自然','世界'],
+  ['f',3,'国际日期变更线 1884 年确定','大致沿 180 度经线，并避开陆地以求整齐',
+    [['实用','基里巴斯把它东移，让全国同一天，方便行政与商业。']],'自然','世界'],
+  ['f',3,'极光是太阳风撞上大气','带电粒子沿地磁场进入高纬，激发氧与氮发光',
+    [['颜色','绿来自氧，红紫来自氮与高层氧，高度决定色调。']],'自然','世界'],
+  ['f',3,'潮汐主要由月球拉动','太阳也有贡献，但量级只有月球的一半左右',
+    [['现象','大潮小潮随日月相对位置变化，因此潮汐可以精确预报。']],'自然','世界'],
+  ['f',3,'彩虹是一个完整的圆','地面看到半圆，只是地平线挡住了另一半',
+    [['证据','在飞机上或高山上就能看到整圈彩虹。']],'自然','世界'],
+  ['f',3,'死海是湖，不是海','内流湖，盐度约 34%，浮力大且几乎没有鱼',
+    [['危机','约旦河取水与蒸发让水位逐年下降，湖面在缩小。']],'自然','世界'],
+  ['f',3,'撒哈拉曾经是绿色草原','约 1 万年前有湖泊、河马与人群',
+    [['转折','轨道变化改变季风，约 5000 年前迅速干旱化，人类退向尼罗河。']],'自然','世界'],
 
   // —— 存疑 / 未确认 ——
   ['r',1,'长城从太空肉眼可见','这是流传最广的“历史事实”之一，但站不住脚',
@@ -657,21 +787,36 @@ const CUSTOM_RAW = [
     [['起源','阿兹特克亡灵崇拜与丰收祭。'],['演变','与天主教万灵节融合，20 世纪被塑造为民族符号。'],['现状','联合国非遗，动画电影推动全球认知，万寿菊、糖骷髅与祭坛成为标志。']],'节日','美洲']
 ];
 
+// 二级分类 → 一级分类（用于顶部筛选）
+const SUB2MAIN = {
+  建筑:'科技', 发明:'科技', 医学:'科技', 科技:'科技',
+  饮食:'生活', 服饰:'生活', 体育:'生活',
+  语言:'语言',
+  地理:'探索', 自然:'探索', 探索:'探索',
+  风俗:'习俗', 节日:'习俗', 婚俗:'习俗', 信仰:'习俗', 技艺:'习俗',
+  艺术:'文化', 文化:'文化', 历史:'历史'
+};
+
 const TRIVIA = TRIVIA_RAW.map((a,i)=>({
   id:'t'+i, y:null, e:null, t:a[2], s:a[3], secs:a[4].map(x=>({h:x[0],p:x[1]})),
-  kind:a[0], cf:a[1], c:a[5], r:a[6], w:'', n:a[0]==='f'?45:40
+  kind:a[0], cf:a[1], c:(SUB2MAIN[a[5]]||'文化'), tg:[a[5]].filter(Boolean), r:a[6],
+  w:'', n:a[0]==='f'?115:108
 }));
 const CUSTOM = CUSTOM_RAW.map((a,i)=>({
   id:'c'+i, y:null, e:null, t:a[1], s:a[2], secs:a[3].map(x=>({h:x[0],p:x[1]})),
-  kind:'c', cf:a[0], c:a[4], r:a[5], w:'', n:55
+  kind:'c', cf:a[0], c:'习俗', tg:[a[4]].filter(Boolean), r:a[5],
+  w:'', n:120
 }));
-const CATS_TRIVIA = ['全部','小知识','存疑'];
-const CATS_CUSTOM = ['全部','节日','饮食','婚俗','信仰','技艺','风俗'];
+
+// 一级分类（靠前的排前面）
+const CATS = ['全部','政治','战争','科技','文化','经济','社会','灾难','历史','语言','生活','习俗','探索','存疑'];
+const ALL = SEED.concat(TRIVIA, CUSTOM);
 
 // 预先生成搜索文本，避免每次按键重复拼接
-[SEED, TRIVIA, CUSTOM].forEach(list=>list.forEach(x=>{
-  x.st = [x.t, x.s, x.c, x.r, x.w, (x.secs||[]).map(s=>s.h+s.p).join(' ')].join(' ').toLowerCase();
-}));
+ALL.forEach(x=>{
+  x.st = [x.t, x.s, x.c, x.r, x.w, (x.tg||[]).join(' '), (x.secs||[]).map(s=>s.h+s.p).join(' ')]
+          .join(' ').toLowerCase();
+});
 const SWATCHES = ['#f5f3ee','#eef1f5','#f7f1e8','#eaf3ef','#f2eef6','#1f2320','#22262b','#141414'];
 
 /* ---------- 2. 状态 ---------- */
@@ -680,8 +825,8 @@ const DEFAULTS = {bgColor:'#f5f3ee', bgImage:'', scrim:0.55, accent:'#2f6f64', e
 let S      = Object.assign({}, DEFAULTS, read(K_SET, {}));
 let FAVS   = read(K_FAV, []);
 let NOTES  = read(K_NOTE, {});
-let VIEW='search', CAT='全部', Q='', POOL=new Map(), extItems=[], extErr='', extBusy=false, ctrl=null, curItem=null, extQ='';
-let SORT='time', SHOW=150;
+let VIEW='all', CAT='全部', Q='', POOL=new Map(), extItems=[], extErr='', extBusy=false, ctrl=null, curItem=null, extQ='';
+let SORT='imp', SHOW=150;
 
 function read(k,d){ try{ const v=localStorage.getItem(k); return v?JSON.parse(v):d; }catch(e){ return d; } }
 function write(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); return true; }catch(e){ return false; } }
@@ -736,24 +881,14 @@ function scoreOf(it,tks){
   }
   return sc + Math.max(0,26-t.length);
 }
-function basePool(){
-  if(VIEW==='trivia') return TRIVIA;
-  if(VIEW==='custom') return CUSTOM;
-  return SEED;
-}
-function visiblePool(){
-  // 有搜索词时跨三个库搜（事件 + 冷知识 + 习俗），否则只看当前页签
-  if(Q.trim()) return SEED.concat(TRIVIA, CUSTOM);
-  return basePool();
-}
 function localResults(){
-  let arr = visiblePool();
+  let arr = VIEW==='fav' ? FAVS.slice() : ALL;
+  if(CAT!=='全部') arr = (CAT==='存疑') ? arr.filter(x=>x.kind==='r') : arr.filter(x=>x.c===CAT);
   const q=Q.trim();
   if(!q){
     arr = arr.slice();
-    if(VIEW==='trivia' && CAT!=='全部') arr = arr.filter(x=> CAT==='存疑' ? x.kind==='r' : x.kind==='f');
-    else if(CAT!=='全部') arr = arr.filter(x=>x.c===CAT);
-    if(SORT==='imp') arr.sort((a,b)=>(b.n||0)-(a.n||0));
+    if(SORT==='imp') arr.sort((a,b)=>(b.n||0)-(a.n||0) || ((a.y==null?9e9:a.y)-(b.y==null?9e9:b.y)));
+    else arr.sort((a,b)=>(a.y==null?9e9:a.y)-(b.y==null?9e9:b.y) || (b.n||0)-(a.n||0));
     return arr;
   }
   const tks=tokens(q);
@@ -766,48 +901,34 @@ function localResults(){
 /* ---------- 6. 渲染 ---------- */
 function renderChips(){
   const box=$('#chips');
-  if(VIEW==='fav'){ box.innerHTML=''; return; }
-  const cats = VIEW==='trivia' ? CATS_TRIVIA : VIEW==='custom' ? CATS_CUSTOM : CATS;
-  box.innerHTML = cats.map(c=>
+  box.innerHTML = CATS.map(c=>
     `<button class="chip${c===CAT?' on':''}" data-cat="${esc(c)}">${esc(c)}</button>`).join('');
 }
 function render(){
   POOL.clear();
   const list=$('#list');
+  const isFav = VIEW==='fav';
   $('#favn').textContent = FAVS.length;
   document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on', t.dataset.view===VIEW));
-
-  if(VIEW==='fav'){
-    $('#meta').textContent = FAVS.length ? `共 ${FAVS.length} 条收藏，按年份排序` : '';
-    if(!FAVS.length){
-      list.innerHTML = `<div class="empty">还没有收藏。搜索结果右侧点「收藏」即可加入这里。</div>`;
-    } else {
-      const arr = FAVS.slice().sort((a,b)=>(a.y==null?9e9:a.y)-(b.y==null?9e9:b.y));
-      arr.forEach(it=>POOL.set(it.id,it));
-      list.innerHTML = arr.map(it=>cardHTML(it,true)).join('');
-    }
-    $('#extsec').hidden = true;
-    return;
-  }
+  $('.minilink').style.display = isFav ? 'none' : '';
+  $('#chips').style.display = isFav ? 'none' : '';
 
   const arr = localResults();
   arr.forEach(it=>POOL.set(it.id,it));
   const q=Q.trim();
-  $('.minilink').style.display = VIEW==='search' ? '' : 'none';
   $('#meta').textContent = arr.length
-    ? (q ? `匹配 ${arr.length} 条（含事件、冷知识、习俗）`
-        : `共 ${arr.length} 条${VIEW==='search' ? '，'+(SORT==='imp'?'按重要度':'按年代')+'排序' : ''}`)
+    ? (q ? `匹配 ${arr.length} 条` : `共 ${arr.length} 条 · ${SORT==='imp'?'按重要度':'按年代'}`)
     : '';
   if(!arr.length){
-    const hint = VIEW==='trivia'
-      ? '这个筛选下没有内容，换个分类试试。'
-      : VIEW==='custom'
-        ? '这个分类下还没有条目，切回「全部」看看。'
-        : `本地库里没有匹配「${esc(q)}」的条目。${S.external ? '' : '可以到 <a href="#" data-act="openset">设置</a> 里开启站外检索，或换个关键词。'}`;
+    const hint = isFav
+      ? '还没有收藏。列表右侧点「收藏」即可加入这里。'
+      : CAT!=='全部'
+        ? '这个分类下还没有条目，点「全部」看看。'
+        : `没有匹配「${esc(q)}」的条目。${S.external ? '' : '可以到 <a href="#" data-act="openset">设置</a> 里开启站外检索，或换个关键词。'}`;
     list.innerHTML = `<div class="empty">${hint}</div>`;
   } else {
     const shown = arr.slice(0, SHOW);
-    list.innerHTML = shown.map(it=>cardHTML(it,false)).join('')
+    list.innerHTML = shown.map(it=>cardHTML(it,isFav)).join('')
       + (arr.length > SHOW
         ? `<button class="more" data-act="more">显示更多（还有 ${arr.length-SHOW} 条）</button>`
         : '');
@@ -828,8 +949,8 @@ function cardHTML(it,isFav){
       <h3 data-act="open">${esc(it.t)}</h3>
       <p>${esc(it.s||'')}</p>
       <div class="tags">
-        ${it.kind==='r'?'':''}
         ${it.c?`<span class="tag c">${esc(it.c)}</span>`:''}
+        ${(it.tg||[]).filter(t=>t!==it.c).map(t=>`<span class="tag">${esc(t)}</span>`).join('')}
         ${it.r?`<span class="tag">${esc(it.r)}</span>`:''}
         ${it.ext?'<span class="tag ext">站外</span>':''}
         ${NOTES[it.id]?'<span class="tag note">有笔记</span>':''}
@@ -905,7 +1026,7 @@ async function remoteSearch(q){
 }
 function renderExt(){
   const sec=$('#extsec');
-  const show = VIEW==='search' && S.external && Q.trim().length>0;
+  const show = VIEW==='all' && S.external && Q.trim().length>0;
   sec.hidden=!show;
   if(!show) return;
   const meta=$('#extmeta'), box=$('#extlist');
@@ -1033,8 +1154,13 @@ function openSettings(){
       </div>
       <div class="hint">图片会压缩后只存在你自己的浏览器里，不会上传到任何服务器。</div>
       <div style="margin-top:12px">
-        <label style="display:block;font-size:12.5px;color:var(--muted);margin-bottom:4px">背景遮罩 ${Math.round(S.scrim*100)}%</label>
-        <input type="range" id="scrim" min="0" max="95" step="1" value="${Math.round(S.scrim*100)}">
+        <label style="display:block;font-size:12.5px;color:var(--muted);margin-bottom:4px">背景遮罩 <span id="scrimPct">${Math.round(S.scrim*100)}%</span></label>
+        <div class="slider" id="scrimSlider" role="slider" tabindex="0"
+             aria-label="背景遮罩浓度" aria-valuemin="0" aria-valuemax="95" aria-valuenow="${Math.round(S.scrim*100)}">
+          <div class="slider-rail"><div class="slider-fill" style="width:${Math.round(S.scrim*100)}%"></div></div>
+          <div class="slider-knob" style="left:${Math.round(S.scrim*100)}%"></div>
+        </div>
+        <div class="slider-marks"><span>0%</span><span>95%</span></div>
         <div class="hint">越大文字越清楚，图片越淡。</div>
       </div>
     </div>
@@ -1061,17 +1187,6 @@ function openSettings(){
           <option value="both" ${S.lang==='both'?'selected':''}>中文 + 英文</option>
         </select>
       </div>
-    </div>
-
-    <div class="field">
-      <label>中转地址（可选）</label>
-      <input type="url" id="proxy" value="${esc(S.proxy)}" placeholder="https://xxx.workers.dev/?url={url}">
-      <div class="hint">国内直连维基百科通常不通。自建一个 Cloudflare Worker（免费）把地址填进来即可，<code>{url}</code> 会被替换成接口地址。留空则直连。</div>
-      <div class="row" style="margin-top:10px">
-        <button class="btn" data-act="copyworker">复制 Worker 代码</button>
-        <button class="btn" data-act="testproxy">测试连通</button>
-      </div>
-      <div class="hint" id="testout"></div>
     </div>
 
     <hr>
@@ -1103,15 +1218,24 @@ function bindSettings(){
   });
   const ac=$('#accent');
   ac.addEventListener('input',()=>{ S.accent=ac.value; applyTheme(); saveSet(); });
-  const sc=$('#scrim');
-  sc.addEventListener('input',()=>{
-    S.scrim=(+sc.value)/100; applyTheme(); saveSet();
-    sc.parentElement.querySelector('label').textContent='背景遮罩 '+sc.value+'%';
-  });
-  $('#external').addEventListener('change',e=>{ S.external=e.target.checked; saveSet(); render(); });
-  $('#lang').addEventListener('change',e=>{ S.lang=e.target.value; saveSet(); });
-  $('#proxy').addEventListener('change',e=>{ S.proxy=e.target.value.trim(); saveSet(); toast('已保存中转地址'); });
-  $('#imgfile').addEventListener('change',async e=>{
+  // 背景遮罩：自绘滑块，指针位置按容器实际宽度换算，不受缩放/滚动影响
+  const slider=$('#scrimSlider');
+  if(slider){
+    bindSlider(slider, {
+      min:0, max:95,
+      get:()=>Math.round((S.scrim==null?0.55:S.scrim)*100),
+      set:v=>{
+        v=Math.max(0, Math.min(95, Math.round(v)));
+        S.scrim=v/100;
+        const pct=$('#scrimPct'); if(pct) pct.textContent=v+'%';
+        applyTheme();
+        clearTimeout(scrimSaveT); scrimSaveT=setTimeout(saveSet, 250);
+      }
+    });
+  }
+  $('#external')&&$('#external').addEventListener('change',e=>{ S.external=e.target.checked; saveSet(); render(); });
+  $('#lang')&&$('#lang').addEventListener('change',e=>{ S.lang=e.target.value; saveSet(); });
+  $('#proxy')&&$('#proxy').addEventListener('change',e=>{ S.proxy=e.target.value.trim(); saveSet(); toast('已保存中转地址'); });  $('#imgfile')&&$('#imgfile').addEventListener('change',async e=>{
     const f=e.target.files&&e.target.files[0]; if(!f) return;
     try{
       const data=await shrink(f);
@@ -1120,7 +1244,59 @@ function bindSettings(){
       applyTheme(); openSettings(); toast('背景已更新');
     }catch(err){ toast('图片读取失败'); }
   });
-  $('#jsonfile').addEventListener('change',importJSON);
+  $('#jsonfile')&&$('#jsonfile').addEventListener('change',importJSON);
+}
+
+/*
+ * 自绘滑块：不依赖原生 input[type=range]。
+ * 原生 range 在带 backdrop-filter 的滚动容器里、或页面有缩放时，
+ * 命中区域容易偏移（点上去没反应、拖动不跟手），用指针坐标自己算百分比最稳。
+ */
+let scrimSaveT=null;
+function bindSlider(el, {get, set, min=0, max=100}){
+  const fill=el.querySelector('.slider-fill');
+  const knob=el.querySelector('.slider-knob');
+  const clamp=v=>Math.max(min, Math.min(max, v));
+  const paint=v=>{
+    v=clamp(v);
+    fill.style.width=v+'%';
+    knob.style.left=v+'%';
+    el.setAttribute('aria-valuenow', Math.round(v));
+  };
+  paint(get());
+
+  const pctAt=e=>{
+    const r=el.getBoundingClientRect();
+    if(!r.width) return get();
+    return Math.round(Math.min(Math.max(e.clientX-r.left, 0), r.width) / r.width * 100);
+  };
+  let dragging=false;
+
+  const apply=e=>{ const v=clamp(pctAt(e)); paint(v); set(v); };
+
+  el.addEventListener('pointerdown', e=>{
+    e.preventDefault();
+    dragging=true;
+    if(el.setPointerCapture) { try{ el.setPointerCapture(e.pointerId); }catch(_){} }
+    apply(e);
+  });
+  el.addEventListener('pointermove', e=>{ if(!dragging) return; e.preventDefault(); apply(e); });
+  el.addEventListener('pointerup', e=>{ dragging=false; });
+  el.addEventListener('pointercancel', ()=>{ dragging=false; });
+  el.addEventListener('lostpointercapture', ()=>{ dragging=false; });
+
+  el.addEventListener('keydown', e=>{
+    const step=e.shiftKey?10:1;
+    let v=null;
+    if(e.key==='ArrowLeft'||e.key==='ArrowDown')  v=get()-step;
+    if(e.key==='ArrowRight'||e.key==='ArrowUp')   v=get()+step;
+    if(e.key==='Home') v=0;
+    if(e.key==='End')  v=100;
+    if(v!==null){ e.preventDefault(); v=clamp(v); paint(v); set(v); }
+  });
+
+  // 窗口尺寸变化时不需要重算（百分比布局），但抽屉重新打开时会重新绑定
+  return paint;
 }
 
 function shrink(file,maxW=1500){
@@ -1196,8 +1372,7 @@ $('#sortBtn').addEventListener('click',()=>{
   SORT = SORT==='time' ? 'imp' : 'time';
   $('#sortBtn').textContent = SORT==='time' ? '按重要度' : '按年代';
   SHOW=150; render();
-});
-$('#mask').addEventListener('click',closeDrawer);
+});$('#mask').addEventListener('click',closeDrawer);
 
 function doRemote(){
   if(!S.external){ toast('站外检索已关闭，可在设置中开启'); return; }
@@ -1282,7 +1457,8 @@ document.addEventListener('keydown',e=>{
 });
 
 /* ---------- 11. 启动 ---------- */
-$('#seedcount').textContent=SEED.length;
+$('#seedcount').textContent = SEED.length + TRIVIA.length + CUSTOM.length;
+$('#sortBtn').textContent = SORT==='time' ? '按重要度' : '按年代';
 applyTheme(); renderChips(); render();
 
 // 如果仓库里带了 data/events.json（tools/bake.mjs 生成），自动合并进来
@@ -1326,19 +1502,18 @@ applyTheme(); renderChips(); render();
         if(titles.has(x.t) || sameYear.some(t=>near(t,x.t))){ skipped++; return; }
         SEED.push({
           id:'x'+i, y:(x.y==null?null:x.y), e:(x.e==null?null:x.e), t:x.t,
-          s:x.s||'', c:x.c||'', r:x.r||'', w:x.w||x.t, n:(x.n||30),
-          kind:'event', cf:3, secs:null,
+          s:x.s||'', c:x.c||'', r:x.r||'', w:x.w||x.t, n:Math.min(x.n||30, 90),
+          kind:'event', cf:3, secs:null, tg:[],
           st:[x.t, x.s, x.c, x.r, x.w].join(' ').toLowerCase()
         });
+        ALL.push(SEED[SEED.length-1]);
         addIndex(x); titles.add(x.t);
         added++;
       });
       if(!added) return;
       SEED.sort((a,b)=>(a.y==null?9e9:a.y)-(b.y==null?9e9:b.y));
-      $('#seedcount').textContent=SEED.length;
-      SHOW=150;
+      $('#seedcount').textContent=SEED.length + TRIVIA.length + CUSTOM.length;
       render();
-      toast('已加载扩展事件 '+added+' 条');
     })
     .catch(()=>{});
 })();
