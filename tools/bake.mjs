@@ -147,7 +147,8 @@ function longText(text, max = LONG_MAX) {
   const out = [];
   let len = 0;
   for (const p of paras) {
-    if (stop.test(p)) break;
+    // 维基的章节标题会带 = 号，去掉再判断
+    if (stop.test(p.replace(/^=+\s*/, '').replace(/\s*=+$/, ''))) break;
     if (p.length < 12) continue;
     if (len && len + p.length > max) break;
     out.push(p);

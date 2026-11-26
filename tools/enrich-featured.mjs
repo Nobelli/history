@@ -23,6 +23,9 @@ const RAW = new Function('return ' + mRaw[1])();
 const mMy = html.match(/const MYTH_RAW = (\[[\s\S]*?\n\];)/);
 const MYTH_RAW = mMy ? new Function('return ' + mMy[1])() : [];
 
+const mArt = html.match(/const ART_RAW = (\[[\s\S]*?\n\];)/);
+const ART_RAW = mArt ? new Function('return ' + mArt[1])() : [];
+
 function longText(text, max = MAX) {
   const paras = (text || '')
     .split(/\n+/)
@@ -75,6 +78,14 @@ for (const a of MYTH_RAW) {
   seen.add(title);
   jobs.push({ t: title, w: title });
 }
+// 艺术条目标题常带书名号，去掉再查
+for (const a of ART_RAW) {
+  const title = a[2];
+  const wiki = title.replace(/^《|》$/g, '');
+  if (!title || seen.has(wiki)) continue;
+  seen.add(wiki);
+  jobs.push({ t: title, w: wiki });
+}
 console.log(`待处理 ${jobs.length} 条`);
 
 const out = [];
@@ -115,7 +126,7 @@ await writeFile(CACHE, JSON.stringify(cache), 'utf8');
 
 // 保持与 RAW / MYTH_RAW 相同顺序，方便对比
 const order = new Map();
-[...RAW.map(a => a[2]), ...MYTH_RAW.map(a => a[2])].forEach((t, i) => order.set(t, i));
+[...RAW.map(a => a[2]), ...MYTH_RAW.map(a => a[2]), ...ART_RAW.map(a => a[2])].forEach((t, i) => order.set(t, i));
 out.sort((x, y) => (order.get(x.t) ?? 1e9) - (order.get(y.t) ?? 1e9));
 
 await mkdir(new URL('../data/', import.meta.url), { recursive: true });
